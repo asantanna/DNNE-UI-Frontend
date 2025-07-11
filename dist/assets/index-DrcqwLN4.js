@@ -122793,7 +122793,7 @@ const menu$6 = {
   onChangeTooltip: "The workflow will be queued once a change is made",
   runWorkflow: "Run workflow (Shift to queue at front)",
   runWorkflowFront: "Run workflow (Queue at front)",
-  run: "Run",
+  run: "Export",
   execute: "Execute",
   interrupt: "Cancel current run",
   refresh: "Refresh node definitions",
