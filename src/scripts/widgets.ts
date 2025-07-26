@@ -7,6 +7,7 @@ import type {
 
 import { useBooleanWidget } from '@/composables/widgets/useBooleanWidget'
 import { useComboWidget } from '@/composables/widgets/useComboWidget'
+import { useDNNEComboWidget } from '@/composables/widgets/useDNNEComboWidget'
 import { useFloatWidget } from '@/composables/widgets/useFloatWidget'
 import { useImageUploadWidget } from '@/composables/widgets/useImageUploadWidget'
 import { useIntWidget } from '@/composables/widgets/useIntWidget'
@@ -288,6 +289,6 @@ export const ComfyWidgets: Record<string, ComfyWidgetConstructor> = {
   BOOLEAN: transformWidgetConstructorV2ToV1(useBooleanWidget()),
   STRING: transformWidgetConstructorV2ToV1(useStringWidget()),
   MARKDOWN: transformWidgetConstructorV2ToV1(useMarkdownWidget()),
-  COMBO: transformWidgetConstructorV2ToV1(useComboWidget()),
+  COMBO: transformWidgetConstructorV2ToV1(useDNNEComboWidget()),
   IMAGEUPLOAD: useImageUploadWidget()
 }
