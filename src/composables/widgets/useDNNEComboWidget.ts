@@ -20,6 +20,7 @@ import {
 } from '@/scripts/widgets'
 import { api } from '@/scripts/api'
 import { app } from '@/scripts/app'
+import { useWorkflowStore } from '@/stores/workflowStore'
 
 import { useRemoteWidget } from './useRemoteWidget'
 
@@ -51,10 +52,8 @@ const addMultiSelectWidget = (node: LGraphNode, inputSpec: ComboInputSpec) => {
 }
 
 const addDNNEComboWidget = (node: LGraphNode, inputSpec: ComboInputSpec) => {
-  console.log(`[DNNE] Creating DNNE combo widget for ${inputSpec.name} on node ${node.type}`)
   const defaultValue = getDefaultValue(inputSpec)
   const comboOptions = inputSpec.options ?? []
-  console.log(`[DNNE] Widget options:`, comboOptions)
   
   // Create the combo widget with a callback that handles onChange
   const widget = node.addWidget(
@@ -62,21 +61,14 @@ const addDNNEComboWidget = (node: LGraphNode, inputSpec: ComboInputSpec) => {
     inputSpec.name,
     defaultValue,
     async (value) => {
-      console.log(`[DNNE] ✅ Combo callback fired! Widget: ${inputSpec.name}, Value: ${value}, Node: ${node.type}`)
-      
       // Check if this is a task selection widget that needs to update other nodes
       if (inputSpec.name === 'task' && value !== 'none') {
-        console.log(`[DNNE] This is a task widget, fetching config for: ${value}`)
         try {
           // Call the new API endpoint to get environment configuration
           const url = `/dnne/env_config/${value}`
-          console.log(`[DNNE] Fetching from: ${url}`)
           const response = await api.fetchApi(url)
-          console.log(`[DNNE] Response status: ${response.status}`)
           if (response.ok) {
             const config = await response.json()
-            console.log('[DNNE] Received environment config:', config)
-            
             // Update all 3 nodes with the new configuration
             updateNodesWithConfig(node, config)
           } else {
@@ -86,16 +78,12 @@ const addDNNEComboWidget = (node: LGraphNode, inputSpec: ComboInputSpec) => {
         } catch (error) {
           console.error('[DNNE] Error fetching environment config:', error)
         }
-      } else {
-        console.log(`[DNNE] Not a task widget or value is 'none', skipping config fetch`)
       }
     },
     {
       values: comboOptions
     }
   ) as IComboWidget
-  
-  console.log(`[DNNE] Widget created successfully`)
 
   if (inputSpec.remote) {
     const remoteWidget = useRemoteWidget({
@@ -131,8 +119,7 @@ const addDNNEComboWidget = (node: LGraphNode, inputSpec: ComboInputSpec) => {
 }
 
 // Helper function to update all 3 nodes with new configuration
-function updateNodesWithConfig(triggerNode: LGraphNode, config: any) {
-  console.log('[DNNE] updateNodesWithConfig called with config:', config)
+function updateNodesWithConfig(_triggerNode: LGraphNode, config: any) {
   const graph = app.graph
   if (!graph) {
     console.error('[DNNE] No graph available!')
@@ -141,47 +128,51 @@ function updateNodesWithConfig(triggerNode: LGraphNode, config: any) {
   
   // Find all nodes in the graph
   const nodes = graph._nodes
-  console.log(`[DNNE] Found ${nodes.length} nodes in graph`)
   
-  let nodesUpdated = 0
   for (const node of nodes) {
-    console.log(`[DNNE] Checking node: ${node.type} (id: ${node.id})`)
-    
     // Update IsaacGymEnvs node
     if (node.type === 'IsaacGymEnvs' && config.isaac_gym_env) {
-      console.log('[DNNE] Updating IsaacGymEnvs node widgets')
       updateNodeWidgets(node, config.isaac_gym_env)
-      nodesUpdated++
     }
     // Update PPOConfig node  
     else if (node.type === 'PPOConfig' && config.ppo_config) {
-      console.log('[DNNE] Updating PPOConfig node widgets')
       updateNodeWidgets(node, config.ppo_config)
-      nodesUpdated++
     }
     // Update PPOAgent node
     else if (node.type === 'PPOAgent' && config.ppo_agent) {
-      console.log('[DNNE] Updating PPOAgent node widgets')
       updateNodeWidgets(node, config.ppo_agent)
-      nodesUpdated++
     }
   }
   
-  console.log(`[DNNE] Updated ${nodesUpdated} nodes`)
-  
   // Mark the graph as modified
   app.graph.setDirtyCanvas(true, true)
+  
+  // CRITICAL: Call graph.change() to notify LiteGraph that the graph has changed
+  // This ensures widget values are properly tracked for saving
+  app.graph.change()
+  
+  // Force the ChangeTracker to update its state immediately
+  // This prevents the modified indicator from disappearing when clicking on canvas
+  const workflowStore = useWorkflowStore()
+  const activeWorkflow = workflowStore.activeWorkflow
+  if (activeWorkflow?.changeTracker) {
+    activeWorkflow.changeTracker.checkState()
+  }
 }
 
 // Helper function to update widget values
 function updateNodeWidgets(node: LGraphNode, widgetValues: Record<string, any>) {
-  if (!node.widgets) return
+  if (!node.widgets) {
+    return
+  }
   
+  // Now update widgets
   for (const widget of node.widgets) {
     // Skip if this widget doesn't have a corresponding value in the config
     if (!(widget.name in widgetValues)) continue
     
     const newValue = widgetValues[widget.name]
+    const oldValue = widget.value
     
     // Update the widget value
     widget.value = newValue
@@ -191,7 +182,10 @@ function updateNodeWidgets(node: LGraphNode, widgetValues: Record<string, any>) 
       widget.callback(newValue)
     }
     
-    console.log(`[DNNE] Updated ${node.type}.${widget.name} = ${newValue}`)
+    // Notify the node that this widget has changed
+    if (node.onWidgetChanged) {
+      node.onWidgetChanged.call(node, widget.name, newValue, oldValue, widget)
+    }
   }
 }
 
@@ -200,15 +194,21 @@ export const useDNNEComboWidget = () => {
     node: LGraphNode,
     inputSpec: InputSpec
   ) => {
-    console.log(`[DNNE] useDNNEComboWidget called for node ${node.type}, widget ${inputSpec.name}`)
+    // Try multiple ways to identify the node type
+    const nodeType = node.type || (node as any).comfyClass || (node.constructor as any).type || ''
+    // Also check the constructor name as a fallback
+    const constructorName = node.constructor?.name || ''
     
     if (!isComboInputSpec(inputSpec)) {
       throw new Error(`Invalid input data: ${inputSpec}`)
     }
     
-    // Use DNNE combo widget for task selection, regular combo for others
-    const isDNNETaskWidget = inputSpec.name === 'task' && node.type === 'IsaacGymEnvs'
-    console.log(`[DNNE] Is DNNE task widget? ${isDNNETaskWidget} (name=${inputSpec.name}, type=${node.type})`)
+    // Use DNNE combo widget for task selection on IsaacGymEnvs nodes
+    // Check multiple ways to identify the node
+    const isIsaacGymEnvsNode = nodeType === 'IsaacGymEnvs' || 
+                               constructorName === 'IsaacGymEnvs' ||
+                               (node.title && node.title.includes('Isaac Gym'))
+    const isDNNETaskWidget = inputSpec.name === 'task' && isIsaacGymEnvsNode
     
     const result = inputSpec.multi_select
       ? addMultiSelectWidget(node, inputSpec)
@@ -216,7 +216,6 @@ export const useDNNEComboWidget = () => {
         ? addDNNEComboWidget(node, inputSpec)
         : addComboWidget(node, inputSpec)
         
-    console.log(`[DNNE] Widget type created: ${inputSpec.multi_select ? 'MultiSelect' : (isDNNETaskWidget ? 'DNNECombo' : 'RegularCombo')}`)
     return result
   }
 
@@ -225,16 +224,13 @@ export const useDNNEComboWidget = () => {
 
 // Helper to add regular combo widget (fallback)
 const addComboWidget = (node: LGraphNode, inputSpec: ComboInputSpec) => {
-  console.log(`[DNNE] Creating REGULAR combo widget for ${inputSpec.name} on node ${node.type}`)
   const defaultValue = getDefaultValue(inputSpec)
   const comboOptions = inputSpec.options ?? []
   const widget = node.addWidget(
     'combo',
     inputSpec.name,
     defaultValue,
-    (value) => {
-      console.log(`[DNNE] Regular combo callback for ${inputSpec.name}: ${value}`)
-    },
+    () => {},
     {
       values: comboOptions
     }

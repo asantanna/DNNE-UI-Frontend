@@ -6,7 +6,6 @@ import type {
 } from '@comfyorg/litegraph/dist/types/widgets'
 
 import { useBooleanWidget } from '@/composables/widgets/useBooleanWidget'
-import { useComboWidget } from '@/composables/widgets/useComboWidget'
 import { useDNNEComboWidget } from '@/composables/widgets/useDNNEComboWidget'
 import { useFloatWidget } from '@/composables/widgets/useFloatWidget'
 import { useImageUploadWidget } from '@/composables/widgets/useImageUploadWidget'
