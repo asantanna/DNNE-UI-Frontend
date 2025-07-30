@@ -229,7 +229,11 @@ export const zComfyNodeDef = z.object({
    * Comfy Org account.
    * https://www.comfy.org/faq
    */
-  api_node: z.boolean().optional()
+  api_node: z.boolean().optional(),
+  /** Node color property for litegraph */
+  color: z.string().optional(),
+  /** Node background color property for litegraph */
+  bgcolor: z.string().optional()
 })
 
 // `/object_info`

@@ -82,8 +82,17 @@ export const useLitegraphService = () => {
         this.#setInitialSize()
         this.serialize_widgets = true
 
+        // Apply node colors from backend definition
+        if (ComfyNode.nodeData.color) {
+          this.color = ComfyNode.nodeData.color
+        }
+        if (ComfyNode.nodeData.bgcolor) {
+          this.bgcolor = ComfyNode.nodeData.bgcolor
+        }
+        
         // Mark API Nodes yellow by default to distinguish with other nodes.
-        if (ComfyNode.nodeData.api_node) {
+        // Only apply if no color was set from backend
+        if (ComfyNode.nodeData.api_node && !ComfyNode.nodeData.color) {
           this.color = LGraphCanvas.node_colors.yellow.color
           this.bgcolor = LGraphCanvas.node_colors.yellow.bgcolor
         }
@@ -314,6 +323,19 @@ export const useLitegraphService = () => {
     // because `registerNodeType` will overwrite the assignments.
     node.category = nodeDef.category
     node.title = nodeDef.display_name || nodeDef.name
+
+    // Override the node's onAdded method to include node ID in title
+    const originalOnAdded = node.prototype.onAdded
+    node.prototype.onAdded = function(graph: any) {
+      if (originalOnAdded) {
+        originalOnAdded.call(this, graph)
+      }
+      // Update title to include node ID when node is added to graph
+      if (this.id && this.title) {
+        const baseTitle = nodeDef.display_name || nodeDef.name || this.type
+        this.title = `${baseTitle} (${this.id})`
+      }
+    }
   }
 
   /**

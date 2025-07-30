@@ -1074,6 +1074,16 @@ export class ComfyApp {
     try {
       // @ts-expect-error Discrepancies between zod and litegraph - in progress
       this.graph.configure(graphData)
+
+      // Update node titles to include IDs after loading
+      for (const node of this.graph._nodes) {
+        if (node && node.id && node.title && node.constructor?.nodeData) {
+          const nodeDef = node.constructor.nodeData
+          const baseTitle = nodeDef.display_name || nodeDef.name || node.type
+          node.title = `${baseTitle} (${node.id})`
+        }
+      }
+
       if (
         restore_view &&
         useSettingStore().get('Comfy.EnableWorkflowViewRestore')
@@ -1462,7 +1472,14 @@ export class ComfyApp {
       const node = LiteGraph.createNode(data.class_type)
       if (!node) continue
       node.id = isNaN(+id) ? id : +id
-      node.title = data._meta?.title ?? node.title
+      // Use the title from metadata if available, otherwise use node type with ID
+      if (data._meta?.title) {
+        node.title = data._meta.title
+      } else {
+        const nodeDef = node.constructor?.nodeData
+        const baseTitle = nodeDef?.display_name || nodeDef?.name || node.type
+        node.title = `${baseTitle} (${node.id})`
+      }
       app.graph.add(node)
     }
 
