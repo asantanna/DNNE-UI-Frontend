@@ -64,12 +64,29 @@ const addDNNEComboWidget = (node: LGraphNode, inputSpec: ComboInputSpec) => {
       // Check if this is a task selection widget that needs to update other nodes
       if (inputSpec.name === 'task' && value !== 'none') {
         try {
-          // Call the new API endpoint to get environment configuration
-          const url = `/dnne/env_config/${value}`
+          // Determine which node types are in the graph to optimize the API call
+          const nodeTypes = new Set<string>()
+          const graph = app.graph
+          if (graph) {
+            for (const node of graph._nodes) {
+              if (['PPOAgent', 'PPOConfig', 'IsaacGymSim'].includes(node.type)) {
+                nodeTypes.add(node.type)
+              }
+            }
+          }
+          
+          // Call the API with the specific node types present
+          let url = `/dnne/env_config/${value}`
+          if (nodeTypes.size === 1) {
+            // If only one type of node is present, pass it as a query param
+            const nodeType = Array.from(nodeTypes)[0]
+            url += `?node_type=${nodeType}`
+          }
+          
           const response = await api.fetchApi(url)
           if (response.ok) {
             const config = await response.json()
-            // Update all 3 nodes with the new configuration
+            // Update nodes with the new configuration
             updateNodesWithConfig(node, config)
           } else {
             const errorText = await response.text()
@@ -118,29 +135,89 @@ const addDNNEComboWidget = (node: LGraphNode, inputSpec: ComboInputSpec) => {
   return widget
 }
 
-// Helper function to update all 3 nodes with new configuration
-function updateNodesWithConfig(_triggerNode: LGraphNode, config: any) {
+// Helper function to find nodes connected to a node's output
+function getNodesConnectedToOutput(node: LGraphNode): LGraphNode[] {
+  const connectedNodes: LGraphNode[] = []
+  const graph = app.graph
+  
+  if (!graph || !node.outputs) {
+    return connectedNodes
+  }
+  
+  for (const output of node.outputs) {
+    if (output.links && output.links.length > 0) {
+      for (const linkId of output.links) {
+        const link = graph.links[linkId]
+        if (link) {
+          const targetNode = graph.getNodeById(link.target_id)
+          if (targetNode) {
+            connectedNodes.push(targetNode)
+          }
+        }
+      }
+    }
+  }
+  
+  return connectedNodes
+}
+
+// Helper function to find the node connected to a specific input
+function getNodeConnectedToInput(node: LGraphNode, inputName: string): LGraphNode | null {
+  const graph = app.graph
+  
+  if (!graph || !node.inputs) {
+    return null
+  }
+  
+  // Find the input by name
+  for (let i = 0; i < node.inputs.length; i++) {
+    const input = node.inputs[i]
+    if (input.name === inputName && input.link) {
+      // Get the link connected to this input
+      const link = graph.links[input.link]
+      if (link) {
+        // Find the source node
+        const sourceNode = graph.getNodeById(link.origin_id)
+        if (sourceNode) {
+          return sourceNode
+        }
+      }
+    }
+  }
+  
+  return null
+}
+
+// Helper function to update nodes with new configuration based on connections
+function updateNodesWithConfig(triggerNode: LGraphNode, config: any) {
   const graph = app.graph
   if (!graph) {
     console.error('[DNNE] No graph available!')
     return
   }
   
-  // Find all nodes in the graph
-  const nodes = graph._nodes
+  // Update the trigger node itself if it's an IsaacGymEnvs node
+  if (triggerNode.type === 'IsaacGymEnvs' && config.isaac_gym_env) {
+    updateNodeWidgets(triggerNode, config.isaac_gym_env)
+  }
   
-  for (const node of nodes) {
-    // Update IsaacGymEnvs node
-    if (node.type === 'IsaacGymEnvs' && config.isaac_gym_env) {
-      updateNodeWidgets(node, config.isaac_gym_env)
+  // Find nodes connected to the output of the trigger node
+  const directlyConnected = getNodesConnectedToOutput(triggerNode)
+  
+  for (const node of directlyConnected) {
+    // Update IsaacGymSim nodes that are directly connected
+    if (node.type === 'IsaacGymSim' && config.isaac_gym_sim) {
+      updateNodeWidgets(node, config.isaac_gym_sim)
     }
-    // Update PPOConfig node  
-    else if (node.type === 'PPOConfig' && config.ppo_config) {
-      updateNodeWidgets(node, config.ppo_config)
-    }
-    // Update PPOAgent node
+    // Update PPOAgent nodes that are directly connected
     else if (node.type === 'PPOAgent' && config.ppo_agent) {
       updateNodeWidgets(node, config.ppo_agent)
+      
+      // Now find the PPOConfig connected to this PPOAgent's input
+      const ppoConfig = getNodeConnectedToInput(node, 'config')
+      if (ppoConfig && ppoConfig.type === 'PPOConfig' && config.ppo_config) {
+        updateNodeWidgets(ppoConfig, config.ppo_config)
+      }
     }
   }
   
