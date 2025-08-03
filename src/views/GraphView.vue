@@ -10,6 +10,7 @@
     <div id="comfyui-body-right" class="comfyui-body-right" />
     <div id="graph-canvas-container" class="graph-canvas-container">
       <GraphCanvas @ready="onGraphReady" />
+      <AgentStatusBar class="agent-status-bar-bottom" />
     </div>
   </div>
 
@@ -27,6 +28,7 @@ import { computed, onBeforeUnmount, onMounted, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import MenuHamburger from '@/components/MenuHamburger.vue'
+import AgentStatusBar from '@/components/actionbar/AgentStatusBar.vue'
 import UnloadWindowConfirmDialog from '@/components/dialog/UnloadWindowConfirmDialog.vue'
 import GraphCanvas from '@/components/graph/GraphCanvas.vue'
 import GlobalToast from '@/components/toast/GlobalToast.vue'
@@ -310,6 +312,8 @@ const onGraphReady = () => {
   grid-row: 2;
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .comfyui-body-right {
@@ -328,5 +332,13 @@ const onGraphReady = () => {
   z-index: 1000;
   display: flex;
   flex-direction: column;
+}
+
+.agent-status-bar-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
 }
 </style>

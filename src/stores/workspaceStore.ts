@@ -24,6 +24,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
    * When in focus mode, only the graph editor is visible.
    */
   const focusMode = ref(false)
+  /**
+   * The target for export operations (local or client ID)
+   */
+  const exportTarget = ref<string>('local')
 
   const toast = computed<ToastManager>(() => useToastStore())
   const queueSettings = computed(() => useQueueSettingsStore())
@@ -88,6 +92,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     spinner,
     shiftDown,
     focusMode,
+    exportTarget,
     toggleFocusMode: () => {
       focusMode.value = !focusMode.value
     },

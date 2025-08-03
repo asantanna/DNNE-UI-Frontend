@@ -2,37 +2,20 @@
   <div class="queue-button-group flex">
     <SplitButton
       v-tooltip.bottom="{
-        value: workspaceStore.shiftDown
-          ? $t('menu.runWorkflowFront')
-          : $t('menu.runWorkflow'),
+        value: 'Export workflow',
         showDelay: 600
       }"
       class="comfyui-queue-button"
-      :label="activeQueueModeMenuItem.label"
+      :label="exportButtonLabel"
       severity="primary"
       size="small"
-      :model="queueModeMenuItems"
+      :model="exportTargetMenuItems"
       data-testid="queue-button"
       @click="queuePrompt"
     >
       <template #icon>
-        <i-lucide:list-start v-if="workspaceStore.shiftDown" />
-        <i-lucide:play v-else-if="queueMode === 'disabled'" />
-        <i-lucide:fast-forward v-else-if="queueMode === 'instant'" />
-        <i-lucide:step-forward v-else-if="queueMode === 'change'" />
-      </template>
-      <template #item="{ item }">
-        <Button
-          v-tooltip="{
-            value: item.tooltip,
-            showDelay: 600
-          }"
-          :label="String(item.label)"
-          :icon="item.icon"
-          :severity="item.key === queueMode ? 'primary' : 'secondary'"
-          size="small"
-          text
-        />
+        <i-lucide:upload v-if="selectedExportTarget.type === 'remote'" />
+        <i-lucide:save v-else />
       </template>
     </SplitButton>
     <BatchCountEdit />
@@ -78,7 +61,6 @@ import Button from 'primevue/button'
 import ButtonGroup from 'primevue/buttongroup'
 import SplitButton from 'primevue/splitbutton'
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 
 import { useCommandStore } from '@/stores/commandStore'
 import {
@@ -86,46 +68,39 @@ import {
   useQueueSettingsStore
 } from '@/stores/queueStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
+import { useAgentStore } from '@/stores/agentStore'
 
 import BatchCountEdit from './BatchCountEdit.vue'
 
 const workspaceStore = useWorkspaceStore()
 const queueCountStore = storeToRefs(useQueuePendingTaskCountStore())
 const { mode: queueMode } = storeToRefs(useQueueSettingsStore())
+const agentStore = useAgentStore()
 
-const { t } = useI18n()
-const queueModeMenuItemLookup = computed(() => ({
-  disabled: {
-    key: 'disabled',
-    label: t('menu.run'),
-    tooltip: t('menu.disabledTooltip'),
-    command: () => {
-      queueMode.value = 'disabled'
-    }
-  },
-  instant: {
-    key: 'instant',
-    label: `${t('menu.run')} (${t('menu.instant')})`,
-    tooltip: t('menu.instantTooltip'),
-    command: () => {
-      queueMode.value = 'instant'
-    }
-  },
-  change: {
-    key: 'change',
-    label: `${t('menu.run')} (${t('menu.onChange')})`,
-    tooltip: t('menu.onChangeTooltip'),
-    command: () => {
-      queueMode.value = 'change'
-    }
-  }
-}))
+// const { t } = useI18n() // Removed - not needed with new export dropdown
 
-const activeQueueModeMenuItem = computed(
-  () => queueModeMenuItemLookup.value[queueMode.value]
+// Export target management
+const exportTargets = computed(() => agentStore.exportTargets)
+const selectedExportTarget = computed(() => 
+  exportTargets.value.find(t => t.id === agentStore.selectedTarget) || exportTargets.value[0]
 )
-const queueModeMenuItems = computed(() =>
-  Object.values(queueModeMenuItemLookup.value)
+
+const exportButtonLabel = computed(() => {
+  if (selectedExportTarget.value.type === 'local') {
+    return 'Export'
+  }
+  return `Export to ${selectedExportTarget.value.display}`
+})
+
+const exportTargetMenuItems = computed(() => 
+  exportTargets.value.map(target => ({
+    key: target.id,
+    label: target.display,
+    icon: target.icon,
+    command: () => {
+      agentStore.selectTarget(target.id)
+    }
+  }))
 )
 
 const executingPrompt = computed(() => !!queueCountStore.count.value)
@@ -135,6 +110,9 @@ const hasPendingTasks = computed(
 
 const commandStore = useCommandStore()
 const queuePrompt = async (e: Event) => {
+  // Store the selected export target in workspace for the command to use
+  workspaceStore.exportTarget = agentStore.selectedTarget
+  
   const commandId =
     'shiftKey' in e && e.shiftKey
       ? 'Comfy.QueuePromptFront'
