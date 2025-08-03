@@ -22,28 +22,47 @@ export const useAgentStore = defineStore('agent', () => {
   const activeWorkflows = ref<Map<string, { clientId: string; status: string }>>(new Map())
   const selectedTarget = ref<string>('local')
   
-  // Mock data for development
-  const MOCK_CLIENTS: AgentClient[] = [
-    {
-      id: 'client_mock_wsl',
-      hostname: 'wsl-machine',
-      platform: 'Linux',
-      connected_at: new Date().toISOString()
-    },
-    {
-      id: 'client_mock_ubuntu',
-      hostname: 'ubuntu-box',
-      platform: 'Linux',
-      connected_at: new Date().toISOString()
-    }
-  ]
+  // Initialize connection status
+  // Real data will come from backend via WebSocket and API
   
-  // Initialize with mock data for testing
-  // TODO: Remove this when backend integration is complete
-  connectionStatus.value = AgentConnectionStatus.Connected
-  MOCK_CLIENTS.forEach(client => {
-    clients.value.set(client.id, client)
-  })
+  // Fetch initial client list from API
+  async function fetchClients() {
+    try {
+      const response = await fetch('/api/agent/clients')
+      const data = await response.json()
+      
+      if (data.clients) {
+        clients.value.clear()
+        data.clients.forEach((client: any) => {
+          if (client.type === 'remote') {
+            clients.value.set(client.id, {
+              id: client.id,
+              hostname: client.hostname || client.display,
+              platform: client.platform || 'Unknown',
+              connected_at: client.connected_at || new Date().toISOString()
+            })
+          }
+        })
+      }
+      
+      // Update connection status based on API response
+      if (data.connection_status === 'connected') {
+        connectionStatus.value = AgentConnectionStatus.Connected
+      } else if (data.connection_status === 'connecting') {
+        connectionStatus.value = AgentConnectionStatus.Connecting
+      } else if (data.connection_status === 'error') {
+        connectionStatus.value = AgentConnectionStatus.Error
+      } else {
+        connectionStatus.value = AgentConnectionStatus.Disconnected
+      }
+    } catch (error) {
+      console.error('Failed to fetch agent clients:', error)
+      connectionStatus.value = AgentConnectionStatus.Error
+    }
+  }
+  
+  // Fetch clients on store initialization
+  fetchClients()
   
   // Getters
   const isConnected = computed(() => connectionStatus.value === AgentConnectionStatus.Connected)
@@ -162,12 +181,16 @@ export const useAgentStore = defineStore('agent', () => {
         break
         
       case 'client_connected':
-        addClient({
-          id: message.client_id,
-          hostname: message.info.hostname,
-          platform: message.info.platform,
-          connected_at: message.info.connected_at
-        })
+        // Handle both formats for compatibility
+        const clientInfo = message.client || message.info
+        if (clientInfo) {
+          addClient({
+            id: clientInfo.id || message.client_id,
+            hostname: clientInfo.hostname,
+            platform: clientInfo.platform,
+            connected_at: clientInfo.connected_at
+          })
+        }
         break
         
       case 'client_disconnected':

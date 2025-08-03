@@ -40,6 +40,7 @@ import { useDialogService } from '@/services/dialogService'
 import { useExtensionService } from '@/services/extensionService'
 import { useLitegraphService } from '@/services/litegraphService'
 import { useWorkflowService } from '@/services/workflowService'
+import { useAgentStore } from '@/stores/agentStore'
 import { useApiKeyAuthStore } from '@/stores/apiKeyAuthStore'
 import { useCommandStore } from '@/stores/commandStore'
 import { useExecutionStore } from '@/stores/executionStore'
@@ -639,6 +640,20 @@ export class ComfyApp {
       delete this.nodePreviewImages[this.runningNodeId]
     })
 
+    // Register custom event type for agent updates
+    // @ts-expect-error Custom event type not in ApiCalls
+    api.addEventListener('agent_update', (event: CustomEvent) => {
+      // Forward agent updates to the agent store
+      const agentStore = useAgentStore()
+      const detail = event.detail
+      if (detail && detail.action) {
+        agentStore.handleAgentMessage({
+          type: detail.action,
+          ...detail
+        })
+      }
+    })
+    
     api.addEventListener('executed', ({ detail }) => {
       const output = this.nodeOutputs[detail.display_node || detail.node]
       if (detail.merge && output) {
