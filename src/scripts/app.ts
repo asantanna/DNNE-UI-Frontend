@@ -1222,7 +1222,7 @@ export class ComfyApp {
           try {
             api.authToken = comfyOrgAuthToken
             api.apiKey = comfyOrgApiKey ?? undefined
-            const res = await api.queuePrompt(number, p)
+            const res = await api.queuePrompt(number, p, useWorkspaceStore().exportTarget)
             delete api.authToken
             delete api.apiKey
             executionStore.lastNodeErrors = res.node_errors ?? null
