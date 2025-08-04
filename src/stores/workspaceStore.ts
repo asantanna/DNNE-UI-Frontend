@@ -28,6 +28,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
    * The target for export operations (local or client ID)
    */
   const exportTarget = ref<string>('local')
+  /**
+   * Whether to run the workflow immediately after export
+   */
+  const runAfterExport = ref<boolean>(false)
 
   const toast = computed<ToastManager>(() => useToastStore())
   const queueSettings = computed(() => useQueueSettingsStore())
@@ -93,6 +97,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     shiftDown,
     focusMode,
     exportTarget,
+    runAfterExport,
     toggleFocusMode: () => {
       focusMode.value = !focusMode.value
     },

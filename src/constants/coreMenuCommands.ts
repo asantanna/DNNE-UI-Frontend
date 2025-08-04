@@ -14,17 +14,20 @@ export const CORE_MENU_COMMANDS = [
   [['Edit'], ['Comfy.RefreshNodeDefinitions']],
   [['Edit'], ['Comfy.ClearWorkflow']],
   [['Edit'], ['Comfy.OpenClipspace']],
-  [
-    ['Help'],
-    [
-      'Comfy.Help.OpenComfyUIIssues',
-      'Comfy.Help.OpenComfyUIDocs',
-      'Comfy.Help.OpenComfyOrgDiscord',
-      'Comfy.Help.OpenComfyUIForum'
-    ]
-  ],
-  [
-    ['Help'],
-    ['Comfy.Help.AboutComfyUI', 'Comfy.Feedback', 'Comfy.ContactSupport']
-  ]
+  // Commented out Help menu - ComfyUI specific items don't apply to DNNE
+  // [
+  //   ['Help'],
+  //   [
+  //     'Comfy.Help.OpenComfyUIIssues',
+  //     'Comfy.Help.OpenComfyUIDocs',
+  //     'Comfy.Help.OpenComfyOrgDiscord',
+  //     'Comfy.Help.OpenComfyUIForum'
+  //   ]
+  // ],
+  // [
+  //   ['Help'],
+  //   ['Comfy.Help.AboutComfyUI', 'Comfy.Feedback', 'Comfy.ContactSupport']
+  // ],
+  // DNNE menu - placeholder for future features
+  [['DNNE'], []]  // Will add items like 'DNNE.ShowAllLogs' when implemented
 ]
