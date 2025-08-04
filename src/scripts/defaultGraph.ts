@@ -1,6 +1,6 @@
 import type { ComfyWorkflowJSON } from '@/schemas/comfyWorkflowSchema'
 
-export const defaultGraph: ComfyWorkflowJSON = {
+export const comfyUIDefaultGraph: ComfyWorkflowJSON = {
   last_node_id: 9,
   last_link_id: 9,
   nodes: [
@@ -141,8 +141,10 @@ export const defaultGraph: ComfyWorkflowJSON = {
   version: 0.4
 }
 
-export const defaultGraphJSON = JSON.stringify(defaultGraph)
+// Keep the ComfyUI graph for reference
+export const comfyUIDefaultGraphJSON = JSON.stringify(comfyUIDefaultGraph)
 
+// Use blank graph as the new default
 export const blankGraph: ComfyWorkflowJSON = {
   last_node_id: 0,
   last_link_id: 0,
@@ -153,3 +155,9 @@ export const blankGraph: ComfyWorkflowJSON = {
   extra: {},
   version: 0.4
 }
+
+export const blankGraphJSON = JSON.stringify(blankGraph)
+
+// Export blankGraph as defaultGraph for backward compatibility
+export { blankGraph as defaultGraph }
+export const defaultGraphJSON = blankGraphJSON
