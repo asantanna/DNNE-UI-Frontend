@@ -2,12 +2,13 @@
   <div class="queue-button-group flex items-center gap-2">
     <!-- Target Selection -->
     <div class="flex items-center gap-1">
-      <label class="text-sm font-medium">Target:</label>
+      <label class="text-sm font-medium">Client:</label>
       <Dropdown
         v-model="selectedTargetId"
         :options="exportTargets"
         optionLabel="display"
         optionValue="id"
+        id="client-dropdown"
         class="target-dropdown"
         :placeholder="'Select target'"
         size="small"
