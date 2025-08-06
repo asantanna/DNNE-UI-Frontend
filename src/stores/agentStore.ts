@@ -8,6 +8,13 @@ export interface AgentClient {
   connected_at: string
 }
 
+export interface ExportTarget {
+  id: string
+  type: 'local' | 'remote'
+  display: string
+  icon?: string
+}
+
 export enum AgentConnectionStatus {
   Disconnected = 'disconnected',
   Connecting = 'connecting',
@@ -71,9 +78,9 @@ export const useAgentStore = defineStore('agent', () => {
   
   const clientList = computed(() => Array.from(clients.value.values()))
   
-  const exportTargets = computed(() => {
-    const targets = [
-      { id: 'local', type: 'local', display: 'Local', icon: '📍' }
+  const exportTargets = computed((): ExportTarget[] => {
+    const targets: ExportTarget[] = [
+      { id: 'local', type: 'local', display: 'Local' }
     ]
     
     clientList.value.forEach(client => {

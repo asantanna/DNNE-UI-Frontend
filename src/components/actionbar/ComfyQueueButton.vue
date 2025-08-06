@@ -15,13 +15,13 @@
       >
         <template #option="slotProps">
           <div class="flex items-center gap-2">
-            <span>{{ slotProps.option.icon }}</span>
+            <span v-if="slotProps.option.icon">{{ slotProps.option.icon }}</span>
             <span>{{ slotProps.option.display }}</span>
           </div>
         </template>
         <template #value="slotProps">
           <div v-if="slotProps.value" class="flex items-center gap-2">
-            <span>{{ selectedExportTarget.icon }}</span>
+            <span v-if="selectedExportTarget.icon">{{ selectedExportTarget.icon }}</span>
             <span>{{ selectedExportTarget.display }}</span>
           </div>
         </template>
@@ -38,6 +38,7 @@
       severity="primary"
       size="small"
       data-testid="export-button"
+      :disabled="isExportDisabled"
       @click="queuePrompt"
     >
       <template #icon>
@@ -56,6 +57,7 @@
         v-model="runAfterExport"
         inputId="run-after-export"
         binary
+        :disabled="isRunAfterExportDisabled"
       />
       <label for="run-after-export" class="ml-2 text-sm cursor-pointer">
         Run after export
@@ -70,7 +72,7 @@
       }"
       label="Stop"
       :severity="isRunning || hasPendingTasks ? 'danger' : 'secondary'"
-      :disabled="!isRunning && !hasPendingTasks"
+      :disabled="isStopDisabled"
       size="small"
       @click="handleStop"
     />
@@ -101,7 +103,7 @@ import { storeToRefs } from 'pinia'
 import Button from 'primevue/button'
 import Dropdown from 'primevue/dropdown'
 import Checkbox from 'primevue/checkbox'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useCommandStore } from '@/stores/commandStore'
 import LogViewer from '@/components/dialog/LogViewer.vue'
 import {
@@ -128,6 +130,7 @@ const selectedExportTarget = computed(() =>
 
 // Run after export state
 const runAfterExport = ref(false)
+const previousRunAfterExport = ref(true)  // Default true for first remote selection
 
 // Log viewer state
 const showLogViewer = ref(false)
@@ -149,6 +152,23 @@ const hasLogs = computed(() => {
   // For now, enable logs button if there are any workflows
   // In future, check if logs are actually available
   return agentStore.activeWorkflowCount > 0 || selectedTargetId.value !== 'local'
+})
+
+// Computed properties for disabled states
+const isRunAfterExportDisabled = computed(() => selectedTargetId.value === 'local')
+const isExportDisabled = computed(() => isRunning.value)
+const isStopDisabled = computed(() => !isRunning.value && !hasPendingTasks.value)
+
+// Watch for target changes to manage checkbox state
+watch(selectedTargetId, (newTarget, oldTarget) => {
+  if (newTarget === 'local') {
+    // Save current state and disable
+    previousRunAfterExport.value = runAfterExport.value
+    runAfterExport.value = false
+  } else if (oldTarget === 'local') {
+    // Restore previous state when switching from local
+    runAfterExport.value = previousRunAfterExport.value
+  }
 })
 
 

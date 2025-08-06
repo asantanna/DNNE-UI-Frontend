@@ -571,7 +571,8 @@ export class ComfyApi extends EventTarget {
   async queuePrompt(
     number: number,
     data: { output: ComfyApiWorkflow; workflow: ComfyWorkflowJSON },
-    export_target?: string
+    export_target?: string,
+    run_after_export?: boolean
   ): Promise<PromptResponse> {
     const { output: prompt, workflow } = data
 
@@ -587,6 +588,10 @@ export class ComfyApi extends EventTarget {
     
     if (export_target !== undefined) {
       body.export_target = export_target
+    }
+    
+    if (run_after_export !== undefined) {
+      body.run_after_export = run_after_export
     }
 
     if (number === -1) {
