@@ -93,6 +93,38 @@ const zDisplayComponentWsMessage = z.object({
   props: z.record(z.string(), z.any()).optional()
 })
 
+// DNNE Agent WebSocket messages
+const zWorkflowStatusWsMessage = z.object({
+  workflow_id: z.string(),
+  workflow_name: z.string().optional(),
+  status: z.enum(['deployed', 'running', 'completed', 'failed', 'stopped']),
+  details: z.any().optional()
+})
+
+const zWorkflowLogWsMessage = z.object({
+  workflow_id: z.string(),
+  log: z.object({
+    timestamp: z.number(),
+    level: z.string(),
+    message: z.string()
+  })
+})
+
+const zClientStatusUpdateWsMessage = z.object({
+  msg_type: z.enum(['client_connected', 'client_disconnected', 'workflow_started', 'workflow_stopped']),
+  client_id: z.string(),
+  client_hostname: z.string(),
+  workflow_id: z.string().optional(),
+  workflow_name: z.string().optional(),
+  workflow_start_time: z.string().optional(),
+  active_workflows: z.number(),
+  active_workflow_details: z.array(z.object({
+    name: z.string(),
+    start_time: z.string()
+  })),
+  timestamp: z.string()
+})
+
 const zTerminalSize = z.object({
   cols: z.number(),
   row: z.number()
@@ -129,6 +161,9 @@ export type ProgressTextWsMessage = z.infer<typeof zProgressTextWsMessage>
 export type DisplayComponentWsMessage = z.infer<
   typeof zDisplayComponentWsMessage
 >
+export type WorkflowStatusWsMessage = z.infer<typeof zWorkflowStatusWsMessage>
+export type WorkflowLogWsMessage = z.infer<typeof zWorkflowLogWsMessage>
+export type ClientStatusUpdateWsMessage = z.infer<typeof zClientStatusUpdateWsMessage>
 // End of ws messages
 
 const zPromptInputItem = z.object({

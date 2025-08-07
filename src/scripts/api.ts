@@ -24,7 +24,10 @@ import type {
   StatusWsMessageStatus,
   SystemStats,
   User,
-  UserDataFullInfo
+  UserDataFullInfo,
+  WorkflowStatusWsMessage,
+  WorkflowLogWsMessage,
+  ClientStatusUpdateWsMessage
 } from '@/schemas/apiSchema'
 import type {
   ComfyApiWorkflow,
@@ -107,6 +110,10 @@ interface BackendApiCalls {
   b_preview: Blob
   progress_text: ProgressTextWsMessage
   display_component: DisplayComponentWsMessage
+  // DNNE Agent messages
+  workflow_status: WorkflowStatusWsMessage
+  workflow_log: WorkflowLogWsMessage
+  client_status_update: ClientStatusUpdateWsMessage
 }
 
 /** Dictionary of all api calls */

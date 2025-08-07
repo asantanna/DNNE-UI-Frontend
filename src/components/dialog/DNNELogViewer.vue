@@ -26,7 +26,6 @@
             class="log-client-dropdown"
             placeholder="Select client"
             @change="onClientChange"
-            :disabled="loading"
           />
           
           <!-- Log Type Dropdown -->
@@ -39,7 +38,6 @@
             class="log-type-dropdown"
             placeholder="Select type"
             @change="onLogTypeChange"
-            :disabled="loading"
           />
           
           <!-- Auto-scroll checkbox -->
@@ -49,29 +47,18 @@
               inputId="auto-scroll"
               binary
             />
-            <label for="auto-scroll" class="ml-1 text-sm">Auto-scroll</label>
+            <label for="auto-scroll" class="ml-2 text-sm">Auto-scroll</label>
           </div>
         </div>
       </div>
     </template>
-
-    <div class="log-viewer-content">
-      <div v-if="loading" class="flex items-center justify-center h-full">
-        <ProgressSpinner />
-      </div>
-      <div v-else-if="error" class="error-message p-4 text-center">
-        <i class="pi pi-exclamation-triangle mr-2"></i>
-        {{ error }}
-      </div>
-      <div v-else-if="!selectedClientId" class="info-message p-4 text-center">
-        <i class="pi pi-info-circle mr-2"></i>
-        Please select a remote client to view logs
-      </div>
-      <div v-else-if="!logContent" class="info-message p-4 text-center">
-        <i class="pi pi-info-circle mr-2"></i>
-        No logs available for the selected client and type
-      </div>
-      <pre v-else ref="logPre" class="log-text" @scroll="onScroll">{{ logContent }}</pre>
+    
+    <div class="log-container h-full">
+      <pre
+        ref="logPre"
+        class="log-text"
+        @scroll="onScroll"
+      >{{ logContent }}</pre>
     </div>
   </Dialog>
 </template>
@@ -81,115 +68,144 @@ import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import Dialog from 'primevue/dialog'
 import Dropdown from 'primevue/dropdown'
 import Checkbox from 'primevue/checkbox'
-import ProgressSpinner from 'primevue/progressspinner'
 import { useAgentStore } from '@/stores/agentStore'
-// import { api } from '@/scripts/api' // TODO: Enable when workflow_log WebSocket support is added
+import { api } from '@/scripts/api'
+import type { WorkflowLogWsMessage, WorkflowStatusWsMessage } from '@/schemas/apiSchema'
 
 const props = defineProps<{
-  modelValue: boolean
-  initialTarget?: string
+  visible: boolean
 }>()
 
 const emit = defineEmits<{
-  'update:modelValue': [value: boolean]
+  'update:visible': [value: boolean]
 }>()
 
 const agentStore = useAgentStore()
 
-// Dialog visibility
-const visible = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value)
-})
-
-// State
+// Reactive state
 const selectedClientId = ref<string>('')
 const selectedLogType = ref<string>('execution')
 const logContent = ref<string>('')
-const loading = ref(false)
-const error = ref<string | null>(null)
-const autoScroll = ref(false)  // Default to false, will be set based on workflow state
+const autoScroll = ref(true)
 const logPre = ref<HTMLPreElement | null>(null)
 const userScrolling = ref(false)
 const isWorkflowRunning = ref(false)
+const workflowLogs = ref<Map<string, string[]>>(new Map())
 
 // Connection status - check if agent is connected
 const isConnected = computed(() => agentStore.isConnected)
 
 // Log types
 const logTypes = [
-  { value: 'execution', label: 'Execution' },
-  { value: 'telemetry', label: 'Telemetry' }
+  { label: 'Execution', value: 'execution' },
+  { label: 'Telemetry', value: 'telemetry' }
 ]
 
-// Compute remote clients only (exclude local)
-const remoteClients = computed(() => {
-  return agentStore.clientList.map(client => ({
-    id: client.id,
-    display: client.hostname || 'Unknown'
-  }))
+// Get remote clients
+const remoteClients = computed(() => 
+  Array.from(agentStore.clients.values()).filter(c => c.id !== 'local')
+)
+
+// Dialog visibility
+const visible = computed({
+  get: () => props.visible,
+  set: (value: boolean) => emit('update:visible', value)
 })
 
-// Fetch logs for the selected client and type
-const fetchLogs = async () => {
-  if (!selectedClientId.value) {
-    logContent.value = ''
-    return
+// Initialize client selection
+watch(remoteClients, (clients) => {
+  if (clients.length > 0 && !selectedClientId.value) {
+    selectedClientId.value = clients[0].id
+  }
+}, { immediate: true })
+
+// Handle WebSocket workflow log messages
+const handleWorkflowLog = (event: CustomEvent<WorkflowLogWsMessage>) => {
+  const data = event.detail
+  
+  // Only process logs for the selected client's workflows
+  // TODO: Need to track which workflow belongs to which client
+  if (!workflowLogs.value.has(data.workflow_id)) {
+    workflowLogs.value.set(data.workflow_id, [])
   }
   
-  loading.value = true
-  error.value = null
+  const logs = workflowLogs.value.get(data.workflow_id)!
+  const logMessage = `[${new Date(data.log.timestamp * 1000).toISOString()}] [${data.log.level.toUpperCase()}] ${data.log.message}`
+  logs.push(logMessage)
   
-  try {
-    const response = await fetch(`/api/remote/logs/${selectedClientId.value}/${selectedLogType.value}`)
-    
-    if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(errorData.error || `Failed to fetch logs: ${response.statusText}`)
-    }
-    
-    const data = await response.json()
-    logContent.value = data.logs || ''
-    
-    // Update workflow running status
-    isWorkflowRunning.value = data.is_running || false
-    
-    // Smart auto-scroll based on workflow state
-    if (!userScrolling.value) {
-      if (data.is_running) {
-        // Workflow is running - enable auto-scroll and scroll to bottom
-        autoScroll.value = true
-        if (logPre.value) {
-          await nextTick()
-          logPre.value.scrollTop = logPre.value.scrollHeight
-        }
-      } else {
-        // Workflow is not running - disable auto-scroll and scroll to top
-        autoScroll.value = false
-        if (logPre.value) {
-          await nextTick()
-          logPre.value.scrollTop = 0
-        }
+  // Update displayed logs if this is for the current client
+  updateDisplayedLogs()
+  
+  // Auto-scroll if enabled and not user scrolling
+  if (autoScroll.value && !userScrolling.value && logPre.value) {
+    nextTick(() => {
+      if (logPre.value) {
+        logPre.value.scrollTop = logPre.value.scrollHeight
       }
-    }
-  } catch (err) {
-    console.error('Error fetching logs:', err)
-    error.value = err instanceof Error ? err.message : 'Failed to fetch logs'
-    logContent.value = ''
-    isWorkflowRunning.value = false
-  } finally {
-    loading.value = false
+    })
   }
+}
+
+// Handle WebSocket workflow status messages
+const handleWorkflowStatus = (event: CustomEvent<WorkflowStatusWsMessage>) => {
+  const data = event.detail
+  
+  // Update running status
+  if (data.status === 'running') {
+    isWorkflowRunning.value = true
+    
+    // Start a new log section for this workflow
+    if (!workflowLogs.value.has(data.workflow_id)) {
+      workflowLogs.value.set(data.workflow_id, [
+        `=== ${data.workflow_name || 'Workflow'} (${data.workflow_id}) ===`,
+        `Status: ${data.status}`,
+        `Started: ${new Date().toISOString()}`,
+        '=' .repeat(50)
+      ])
+    }
+  } else if (data.status === 'completed' || data.status === 'failed' || data.status === 'stopped') {
+    isWorkflowRunning.value = false
+    
+    // Add completion message
+    const logs = workflowLogs.value.get(data.workflow_id)
+    if (logs) {
+      logs.push('=' .repeat(50))
+      logs.push(`Status: ${data.status}`)
+      logs.push(`Ended: ${new Date().toISOString()}`)
+    }
+  }
+  
+  updateDisplayedLogs()
+}
+
+// Update displayed logs based on selected client and type
+const updateDisplayedLogs = () => {
+  // For now, show all logs since we don't have client-workflow mapping yet
+  // TODO: Filter by client when we have proper client-workflow tracking
+  const allLogs: string[] = []
+  workflowLogs.value.forEach((logs) => {
+    allLogs.push(...logs)
+  })
+  logContent.value = allLogs.join('\n')
 }
 
 // Handle client change
 const onClientChange = () => {
-  fetchLogs()
+  // Clear logs when switching clients
+  logContent.value = ''
+  workflowLogs.value.clear()
+  isWorkflowRunning.value = false
 }
 
 // Handle log type change
 const onLogTypeChange = () => {
-  fetchLogs()
+  // For now, we only show execution logs via WebSocket
+  // Telemetry would need separate handling
+  if (selectedLogType.value === 'telemetry') {
+    logContent.value = 'Telemetry logs not yet implemented for WebSocket streaming'
+  } else {
+    updateDisplayedLogs()
+  }
 }
 
 // Handle manual scrolling
@@ -200,131 +216,100 @@ const onScroll = () => {
   const atBottom = Math.abs(logPre.value.scrollHeight - logPre.value.scrollTop - logPre.value.clientHeight) < 10
   
   if (!atBottom && autoScroll.value) {
-    // User manually scrolled up, temporarily disable auto-scroll
+    // User manually scrolled up, disable auto-scroll temporarily
     userScrolling.value = true
-  } else if (atBottom && userScrolling.value) {
-    // User scrolled back to bottom, re-enable tracking
+    autoScroll.value = false
+  } else if (atBottom && !autoScroll.value) {
+    // User scrolled back to bottom, re-enable auto-scroll
     userScrolling.value = false
+    autoScroll.value = true
   }
 }
 
-// Handle WebSocket log updates
-// TODO: Add workflow_log to API schema when WebSocket support is added
-// const handleWorkflowLog = (event: CustomEvent) => {
-//   // Only update if we're viewing logs for this client
-//   const message = event.detail
-//   if (message.client_id === selectedClientId.value) {
-//     // Append new log content
-//     if (message.log && message.log.message) {
-//       logContent.value += `\n${message.log.message}`
-//       
-//       // Auto-scroll if enabled and user isn't manually scrolling
-//       if (autoScroll.value && !userScrolling.value && logPre.value) {
-//         nextTick(() => {
-//           if (logPre.value) {
-//             logPre.value.scrollTop = logPre.value.scrollHeight
-//           }
-//         })
-//       }
-//     }
-//   }
-// }
+// Watch auto-scroll checkbox changes
+watch(autoScroll, (enabled) => {
+  if (enabled) {
+    userScrolling.value = false
+    // Scroll to bottom when auto-scroll is enabled
+    if (logPre.value) {
+      nextTick(() => {
+        if (logPre.value) {
+          logPre.value.scrollTop = logPre.value.scrollHeight
+        }
+      })
+    }
+  }
+})
 
-// Set initial client when dialog opens
-watch(visible, (newVal) => {
-  if (newVal) {
-    // If initial target provided and it's not 'local', use it
-    if (props.initialTarget && props.initialTarget !== 'local') {
-      selectedClientId.value = props.initialTarget
-    } else if (remoteClients.value.length > 0) {
-      // Otherwise select first remote client if available
-      selectedClientId.value = remoteClients.value[0].id
-    }
-    
-    // Fetch logs if we have a client selected
-    if (selectedClientId.value) {
-      fetchLogs()
-    }
-    
+// Setup WebSocket listeners when dialog opens
+watch(visible, (isVisible) => {
+  if (isVisible) {
     // Listen for live log updates
-    // TODO: Enable when workflow_log is added to API schema
-    // api.addEventListener('workflow_log', handleWorkflowLog as any)
+    api.addEventListener('workflow_log', handleWorkflowLog as any)
+    api.addEventListener('workflow_status', handleWorkflowStatus as any)
   } else {
     // Stop listening when dialog closes
-    // TODO: Enable when workflow_log is added to API schema
-    // api.removeEventListener('workflow_log', handleWorkflowLog as any)
+    api.removeEventListener('workflow_log', handleWorkflowLog as any)
+    api.removeEventListener('workflow_status', handleWorkflowStatus as any)
   }
 })
 
 // Cleanup on unmount
 onUnmounted(() => {
-  // TODO: Enable when workflow_log is added to API schema
-  // api.removeEventListener('workflow_log', handleWorkflowLog as any)
+  api.removeEventListener('workflow_log', handleWorkflowLog as any)
+  api.removeEventListener('workflow_status', handleWorkflowStatus as any)
 })
 </script>
 
 <style scoped>
 .dnne-log-viewer-dialog :deep(.p-dialog-content) {
   padding: 0;
-  height: calc(100% - 4rem);
+  height: calc(100% - 60px);
   overflow: hidden;
 }
 
-.log-viewer-content {
+.log-container {
   height: 100%;
-  overflow: auto;
-  background: var(--p-surface-ground);
+  overflow: hidden;
+  background: #1a1a1a;
+  border-radius: 4px;
+  padding: 8px;
 }
 
 .log-text {
-  margin: 0;
-  padding: 1rem;
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 0.875rem;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  color: var(--p-text-color);
-  background: var(--p-surface-50);
-  min-height: 100%;
+  width: 100%;
+  height: 100%;
   overflow-y: auto;
-  max-height: 100%;
-}
-
-.dark-theme .log-text {
-  background: var(--p-surface-900);
-  color: var(--p-text-color);
+  overflow-x: auto;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #e0e0e0;
+  background: transparent;
+  margin: 0;
+  padding: 8px;
+  white-space: pre;
 }
 
 .log-client-dropdown {
-  min-width: 150px;
+  width: 180px;
 }
 
 .log-type-dropdown {
-  min-width: 120px;
-}
-
-.error-message {
-  color: var(--p-error-color);
-}
-
-.info-message {
-  color: var(--p-text-muted-color);
-}
-
-.dnne-log-viewer-dialog {
-  /* Ensure dialog appears above other UI elements */
-  z-index: 2000;
+  width: 120px;
 }
 
 .status-indicator {
-  color: #4ade80; /* Green - connected */
-  font-size: 1.2em;
-  transition: opacity 0.3s ease;
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #4CAF50;
+  margin-right: 4px;
 }
 
 .status-indicator.disconnected {
-  color: #ef4444; /* Red - disconnected */
+  background-color: #f44336;
   animation: none;
 }
 
@@ -333,7 +318,31 @@ onUnmounted(() => {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Custom scrollbar */
+.log-text::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.log-text::-webkit-scrollbar-track {
+  background: #2a2a2a;
+  border-radius: 4px;
+}
+
+.log-text::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+
+.log-text::-webkit-scrollbar-thumb:hover {
+  background: #666;
 }
 </style>

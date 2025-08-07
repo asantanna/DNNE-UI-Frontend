@@ -12,15 +12,18 @@
 import { useEventListener } from '@vueuse/core'
 import BlockUI from 'primevue/blockui'
 import ProgressSpinner from 'primevue/progressspinner'
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 
 import GlobalDialog from '@/components/dialog/GlobalDialog.vue'
 import config from '@/config'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
+import { useAgentStore } from '@/stores/agentStore'
+import { api } from '@/scripts/api'
 
 import { electronAPI, isElectron } from './utils/envUtil'
 
 const workspaceStore = useWorkspaceStore()
+const agentStore = useAgentStore()
 const isLoading = computed<boolean>(() => workspaceStore.spinner)
 const handleKey = (e: KeyboardEvent) => {
   workspaceStore.shiftDown = e.shiftKey
@@ -39,6 +42,11 @@ const showContextMenu = (event: MouseEvent) => {
   }
 }
 
+// WebSocket event handler for client status updates
+const handleClientStatusUpdate = (event: CustomEvent) => {
+  agentStore.handleAgentMessage({ type: 'client_status_update', ...event.detail })
+}
+
 onMounted(() => {
   // @ts-expect-error fixme ts strict error
   window['__COMFYUI_FRONTEND_VERSION__'] = config.app_version
@@ -47,5 +55,13 @@ onMounted(() => {
   if (isElectron()) {
     document.addEventListener('contextmenu', showContextMenu)
   }
+  
+  // Set up WebSocket event listeners for agent messages
+  api.addEventListener('client_status_update', handleClientStatusUpdate as any)
+})
+
+onUnmounted(() => {
+  // Clean up WebSocket event listeners
+  api.removeEventListener('client_status_update', handleClientStatusUpdate as any)
 })
 </script>

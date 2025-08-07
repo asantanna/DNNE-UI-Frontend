@@ -93,8 +93,8 @@
 
   <!-- DNNE Log Viewer Dialog -->
   <DNNELogViewer
-    v-model="showLogViewer"
-    :initialTarget="selectedTargetId"
+    :visible="showLogViewer"
+    @update:visible="showLogViewer = $event"
   />
 </template>
 
