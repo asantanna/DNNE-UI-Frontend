@@ -11,7 +11,10 @@
   >
     <template #header>
       <div class="flex items-center justify-between w-full">
-        <span class="font-semibold">DNNE Remote Logs</span>
+        <span class="font-semibold flex items-center gap-1">
+          <span :class="['status-indicator', { 'running': isWorkflowRunning, 'disconnected': !isConnected }]">●</span>
+          Remote Logs
+        </span>
         <div class="flex items-center gap-2 ml-4">
           <!-- Client Dropdown -->
           <label class="text-sm">Client:</label>
@@ -48,17 +51,6 @@
             />
             <label for="auto-scroll" class="ml-1 text-sm">Auto-scroll</label>
           </div>
-          
-          <!-- Refresh Button -->
-          <Button
-            icon="pi pi-refresh"
-            severity="secondary"
-            text
-            rounded
-            v-tooltip="'Refresh logs'"
-            @click="fetchLogs"
-            :disabled="loading"
-          />
         </div>
       </div>
     </template>
@@ -88,7 +80,6 @@
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import Dialog from 'primevue/dialog'
 import Dropdown from 'primevue/dropdown'
-import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import ProgressSpinner from 'primevue/progressspinner'
 import { useAgentStore } from '@/stores/agentStore'
@@ -117,9 +108,13 @@ const selectedLogType = ref<string>('execution')
 const logContent = ref<string>('')
 const loading = ref(false)
 const error = ref<string | null>(null)
-const autoScroll = ref(true)
+const autoScroll = ref(false)  // Default to false, will be set based on workflow state
 const logPre = ref<HTMLPreElement | null>(null)
 const userScrolling = ref(false)
+const isWorkflowRunning = ref(false)
+
+// Connection status - check if agent is connected
+const isConnected = computed(() => agentStore.isConnected)
 
 // Log types
 const logTypes = [
@@ -156,15 +151,32 @@ const fetchLogs = async () => {
     const data = await response.json()
     logContent.value = data.logs || ''
     
-    // Auto-scroll to bottom if enabled
-    if (autoScroll.value && logPre.value) {
-      await nextTick()
-      logPre.value.scrollTop = logPre.value.scrollHeight
+    // Update workflow running status
+    isWorkflowRunning.value = data.is_running || false
+    
+    // Smart auto-scroll based on workflow state
+    if (!userScrolling.value) {
+      if (data.is_running) {
+        // Workflow is running - enable auto-scroll and scroll to bottom
+        autoScroll.value = true
+        if (logPre.value) {
+          await nextTick()
+          logPre.value.scrollTop = logPre.value.scrollHeight
+        }
+      } else {
+        // Workflow is not running - disable auto-scroll and scroll to top
+        autoScroll.value = false
+        if (logPre.value) {
+          await nextTick()
+          logPre.value.scrollTop = 0
+        }
+      }
     }
   } catch (err) {
     console.error('Error fetching logs:', err)
     error.value = err instanceof Error ? err.message : 'Failed to fetch logs'
     logContent.value = ''
+    isWorkflowRunning.value = false
   } finally {
     loading.value = false
   }
@@ -244,31 +256,8 @@ watch(visible, (newVal) => {
   }
 })
 
-// Refresh logs periodically if dialog is open and auto-scroll is enabled
-let refreshInterval: number | null = null
-
-watch([visible, autoScroll], ([isVisible, isAutoScroll]) => {
-  if (isVisible && isAutoScroll) {
-    // Refresh every 5 seconds if auto-scroll is on
-    refreshInterval = window.setInterval(() => {
-      if (!userScrolling.value) {
-        fetchLogs()
-      }
-    }, 5000)
-  } else {
-    // Clear interval
-    if (refreshInterval) {
-      clearInterval(refreshInterval)
-      refreshInterval = null
-    }
-  }
-})
-
 // Cleanup on unmount
 onUnmounted(() => {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
   // TODO: Enable when workflow_log is added to API schema
   // api.removeEventListener('workflow_log', handleWorkflowLog as any)
 })
@@ -326,5 +315,25 @@ onUnmounted(() => {
 .dnne-log-viewer-dialog {
   /* Ensure dialog appears above other UI elements */
   z-index: 2000;
+}
+
+.status-indicator {
+  color: #4ade80; /* Green - connected */
+  font-size: 1.2em;
+  transition: opacity 0.3s ease;
+}
+
+.status-indicator.disconnected {
+  color: #ef4444; /* Red - disconnected */
+  animation: none;
+}
+
+.status-indicator.running:not(.disconnected) {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 </style>

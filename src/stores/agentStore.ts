@@ -22,12 +22,19 @@ export enum AgentConnectionStatus {
   Error = 'error'
 }
 
+interface WorkflowInfo {
+  id: string
+  name: string
+  start_time: string
+}
+
 export const useAgentStore = defineStore('agent', () => {
   // State
   const clients = ref<Map<string, AgentClient>>(new Map())
   const connectionStatus = ref<AgentConnectionStatus>(AgentConnectionStatus.Disconnected)
   const activeWorkflows = ref<Map<string, { clientId: string; status: string }>>(new Map())
   const selectedTarget = ref<string>('local')
+  const clientWorkflows = ref<Map<string, WorkflowInfo[]>>(new Map())  // Track workflows per client
   
   // Initialize connection status
   // Real data will come from backend via WebSocket and API
@@ -166,51 +173,88 @@ export const useAgentStore = defineStore('agent', () => {
     }
   }
   
+  // Get workflows for a specific client
+  function getClientWorkflows(clientId: string): WorkflowInfo[] {
+    return clientWorkflows.value.get(clientId) || []
+  }
+  
   // WebSocket message handlers (to be connected later)
   function handleAgentMessage(message: any) {
-    switch (message.type) {
-      case 'server_state':
-        // Initial state from agent server
-        const connectedClients = Object.entries(message.clients || {})
-          .filter(([_, info]: [string, any]) => info.connected)
-          .map(([id, info]: [string, any]) => ({
-            id,
-            hostname: info.hostname,
-            platform: info.platform,
-            connected_at: info.connected_at
-          }))
-        updateClients(connectedClients)
-        
-        // Update workflows
-        Object.entries(message.workflows || {}).forEach(([wfId, wf]: [string, any]) => {
-          updateWorkflowStatus(wfId, wf.client_id, wf.status)
-        })
-        break
-        
-      case 'client_connected':
-        // Handle both formats for compatibility
-        const clientInfo = message.client || message.info
-        if (clientInfo) {
+    // Handle the new unified client_status_update messages
+    if (message.type === 'client_status_update') {
+      const msgType = message.msg_type
+      const clientId = message.client_id
+      const hostname = message.client_hostname
+      
+      switch (msgType) {
+        case 'client_connected':
           addClient({
-            id: clientInfo.id || message.client_id,
-            hostname: clientInfo.hostname,
-            platform: clientInfo.platform,
-            connected_at: clientInfo.connected_at
+            id: clientId,
+            hostname: hostname,
+            platform: message.platform || 'Unknown',
+            connected_at: message.timestamp
           })
-        }
-        break
-        
-      case 'client_disconnected':
+          clientWorkflows.value.set(clientId, [])
+          break
+          
+        case 'client_disconnected':
+          removeClient(clientId)
+          clientWorkflows.value.delete(clientId)
+          break
+          
+        case 'workflow_started':
+        case 'workflow_stopped':
+          // Update workflow list for this client
+          const workflows: WorkflowInfo[] = message.active_workflow_details?.map((wf: any) => ({
+            id: wf.id || message.workflow_id,
+            name: wf.name,
+            start_time: wf.start_time
+          })) || []
+          
+          clientWorkflows.value.set(clientId, workflows)
+          
+          // Also update legacy activeWorkflows map for compatibility
+          if (msgType === 'workflow_started') {
+            activeWorkflows.value.set(message.workflow_id, {
+              clientId: clientId,
+              status: 'running'
+            })
+          } else {
+            activeWorkflows.value.delete(message.workflow_id)
+          }
+          break
+      }
+    }
+    
+    // Keep old message handling for backward compatibility
+    else if (message.type === 'server_state') {
+      // Initial state from agent server
+      const connectedClients = Object.entries(message.clients || {})
+        .filter(([_, info]: [string, any]) => info.connected)
+        .map(([id, info]: [string, any]) => ({
+          id,
+          hostname: info.hostname,
+          platform: info.platform,
+          connected_at: info.connected_at
+        }))
+      updateClients(connectedClients)
+      
+      // Update workflows
+      Object.entries(message.workflows || {}).forEach(([wfId, wf]: [string, any]) => {
+        updateWorkflowStatus(wfId, wf.client_id, wf.status)
+      })
+    }
+    // Keep other legacy message types for compatibility
+    else if (message.type === 'agent_update') {
+      // Handle old agent_update messages for backward compatibility
+      const action = message.action
+      if (action === 'client_connected' && message.client) {
+        addClient(message.client)
+      } else if (action === 'client_disconnected') {
         removeClient(message.client_id)
-        break
-        
-      case 'workflow_status':
-        updateWorkflowStatus(
-          message.workflow_id,
-          message.client_id || '',
-          message.status
-        )
-        break
+      } else if (action === 'workflow_status') {
+        updateWorkflowStatus(message.workflow_id, message.client_id, message.status)
+      }
     }
   }
   
@@ -220,6 +264,7 @@ export const useAgentStore = defineStore('agent', () => {
     connectionStatus,
     activeWorkflows,
     selectedTarget,
+    clientWorkflows,
     
     // Getters
     isConnected,
@@ -237,6 +282,7 @@ export const useAgentStore = defineStore('agent', () => {
     setConnectionStatus,
     selectTarget,
     updateWorkflowStatus,
+    getClientWorkflows,
     handleAgentMessage
   }
 })
