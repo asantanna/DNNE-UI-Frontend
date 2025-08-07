@@ -91,8 +91,8 @@
     />
   </div>
 
-  <!-- Log Viewer Dialog -->
-  <LogViewer
+  <!-- DNNE Log Viewer Dialog -->
+  <DNNELogViewer
     v-model="showLogViewer"
     :initialTarget="selectedTargetId"
   />
@@ -105,7 +105,7 @@ import Dropdown from 'primevue/dropdown'
 import Checkbox from 'primevue/checkbox'
 import { computed, ref, watch } from 'vue'
 import { useCommandStore } from '@/stores/commandStore'
-import LogViewer from '@/components/dialog/LogViewer.vue'
+import DNNELogViewer from '@/components/dialog/DNNELogViewer.vue'
 import {
   useQueuePendingTaskCountStore,
   useQueueSettingsStore
