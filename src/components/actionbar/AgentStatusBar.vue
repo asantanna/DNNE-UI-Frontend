@@ -12,6 +12,11 @@
       <span class="font-semibold">Clients:</span>
       <span>{{ agentStore.clientCount }}</span>
       
+      <!-- Always show workflow count, even when 0 -->
+      <span v-if="agentStore.clientCount === 0 || totalWorkflowCount === 0" class="text-muted">
+        Active Workflows: 0
+      </span>
+      
       <!-- Per-client status with workflow info -->
       <span v-for="client in clientStatuses" :key="client.id" 
             :class="['client-status', { 'active': client.workflowCount > 0 }]"
@@ -30,6 +35,13 @@ import { computed } from 'vue'
 import { useAgentStore } from '@/stores/agentStore'
 
 const agentStore = useAgentStore()
+
+const totalWorkflowCount = computed(() => {
+  return agentStore.clientList.reduce((total, client) => {
+    const workflows = agentStore.getClientWorkflows(client.id)
+    return total + workflows.length
+  }, 0)
+})
 
 const clientStatuses = computed(() => {
   return agentStore.clientList.map(client => {

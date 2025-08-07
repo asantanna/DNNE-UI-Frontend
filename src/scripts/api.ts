@@ -475,6 +475,9 @@ export class ComfyApi extends EventTarget {
             case 'promptQueued':
             case 'logs':
             case 'b_preview':
+            case 'workflow_status':
+            case 'workflow_log':
+            case 'client_status_update':
               this.dispatchCustomEvent(msg.type, msg.data)
               break
             default:
