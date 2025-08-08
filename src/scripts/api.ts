@@ -84,6 +84,7 @@ interface QueuePromptRequestBody {
   number?: number
   export_target?: string
   run_after_export?: boolean
+  workflow_path?: string
 }
 
 /** Dictionary of Frontend-generated API calls */
@@ -585,7 +586,8 @@ export class ComfyApi extends EventTarget {
     number: number,
     data: { output: ComfyApiWorkflow; workflow: ComfyWorkflowJSON },
     export_target?: string,
-    run_after_export?: boolean
+    run_after_export?: boolean,
+    workflow_path?: string
   ): Promise<PromptResponse> {
     const { output: prompt, workflow } = data
 
@@ -605,6 +607,10 @@ export class ComfyApi extends EventTarget {
     
     if (run_after_export !== undefined) {
       body.run_after_export = run_after_export
+    }
+    
+    if (workflow_path !== undefined) {
+      body.workflow_path = workflow_path
     }
 
     if (number === -1) {

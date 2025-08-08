@@ -1238,7 +1238,9 @@ export class ComfyApp {
             api.authToken = comfyOrgAuthToken
             api.apiKey = comfyOrgApiKey ?? undefined
             const workspaceStore = useWorkspaceStore()
-            const res = await api.queuePrompt(number, p, workspaceStore.exportTarget, workspaceStore.runAfterExport)
+            // Get the workflow path if available
+            const workflowPath = workspaceStore.workflow?.activeWorkflow?.path
+            const res = await api.queuePrompt(number, p, workspaceStore.exportTarget, workspaceStore.runAfterExport, workflowPath)
             delete api.authToken
             delete api.apiKey
             executionStore.lastNodeErrors = res.node_errors ?? null
