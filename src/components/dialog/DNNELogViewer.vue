@@ -270,12 +270,23 @@ const onClientChange = () => {
   
   // Request logs for active workflows of this client
   const clientWorkflows = agentStore.getClientWorkflows(selectedClientId.value)
-  clientWorkflows.forEach(wf => {
-    requestWorkflowLogs(wf.id)
-  })
-  
-  // Set running status if any workflows are active
-  isWorkflowRunning.value = clientWorkflows.length > 0
+  if (clientWorkflows.length > 0) {
+    // Request logs for each active workflow
+    clientWorkflows.forEach(wf => {
+      requestWorkflowLogs(wf.id)
+    })
+    isWorkflowRunning.value = true
+  } else {
+    // No active workflows - request latest historical logs
+    if (api.socket && api.socket.readyState === WebSocket.OPEN) {
+      api.socket.send(JSON.stringify({
+        type: 'request_logs',
+        workflow_id: null,
+        client_id: selectedClientId.value
+      }))
+    }
+    isWorkflowRunning.value = false
+  }
 }
 
 // Handle log type change
@@ -334,15 +345,26 @@ watch(visible, (isVisible) => {
     api.addEventListener('workflow_status', handleWorkflowStatus as any)
     api.addEventListener('workflow_log_history', handleWorkflowLogHistory as any)
     
-    // Request logs for currently active workflows
+    // Request logs for currently active workflows or latest historical logs
     if (selectedClientId.value) {
       const clientWorkflows = agentStore.getClientWorkflows(selectedClientId.value)
-      clientWorkflows.forEach(wf => {
-        requestWorkflowLogs(wf.id)
-      })
-      
-      // Set running status if any workflows are active
-      isWorkflowRunning.value = clientWorkflows.length > 0
+      if (clientWorkflows.length > 0) {
+        // Request logs for each active workflow
+        clientWorkflows.forEach(wf => {
+          requestWorkflowLogs(wf.id)
+        })
+        isWorkflowRunning.value = true
+      } else {
+        // No active workflows - request latest historical logs
+        if (api.socket && api.socket.readyState === WebSocket.OPEN) {
+          api.socket.send(JSON.stringify({
+            type: 'request_logs',
+            workflow_id: null,
+            client_id: selectedClientId.value
+          }))
+        }
+        isWorkflowRunning.value = false
+      }
     }
   } else {
     // Stop listening when dialog closes
