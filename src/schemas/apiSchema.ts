@@ -106,8 +106,15 @@ const zWorkflowLogWsMessage = z.object({
   log: z.object({
     timestamp: z.number(),
     level: z.string(),
-    message: z.string()
+    message: z.string(),
+    sequence: z.number().optional() // Added for deduplication
   })
+})
+
+const zWorkflowLogHistoryWsMessage = z.object({
+  workflow_id: z.string(),
+  logs: z.string(),
+  last_sequence: z.number()
 })
 
 const zClientStatusUpdateWsMessage = z.object({
@@ -163,6 +170,7 @@ export type DisplayComponentWsMessage = z.infer<
 >
 export type WorkflowStatusWsMessage = z.infer<typeof zWorkflowStatusWsMessage>
 export type WorkflowLogWsMessage = z.infer<typeof zWorkflowLogWsMessage>
+export type WorkflowLogHistoryWsMessage = z.infer<typeof zWorkflowLogHistoryWsMessage>
 export type ClientStatusUpdateWsMessage = z.infer<typeof zClientStatusUpdateWsMessage>
 // End of ws messages
 

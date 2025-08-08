@@ -90,7 +90,11 @@ const autoScroll = ref(true)
 const logPre = ref<HTMLPreElement | null>(null)
 const userScrolling = ref(false)
 const isWorkflowRunning = ref(false)
-const workflowLogs = ref<Map<string, string[]>>(new Map())
+
+// NEW: Buffering and sequence tracking
+const pendingLogs = ref<Map<string, WorkflowLogWsMessage[]>>(new Map()) // Buffer per workflow
+const historyReceived = ref<Set<string>>(new Set()) // Track which workflows received history
+const lastSequences = ref<Map<string, number>>(new Map()) // Last sequence per workflow
 
 // Connection status - check if agent is connected
 const isConnected = computed(() => agentStore.isConnected)
@@ -101,9 +105,14 @@ const logTypes = [
   { label: 'Telemetry', value: 'telemetry' }
 ]
 
-// Get remote clients
+// Get remote clients with display property for dropdown
 const remoteClients = computed(() => 
-  Array.from(agentStore.clients.values()).filter(c => c.id !== 'local')
+  Array.from(agentStore.clients.values())
+    .filter(c => c.id !== 'local')
+    .map(c => ({
+      ...c,
+      display: c.hostname  // Add display property for dropdown
+    }))
 )
 
 // Dialog visibility
@@ -122,21 +131,126 @@ watch(remoteClients, (clients) => {
 // Handle WebSocket workflow log messages
 const handleWorkflowLog = (event: CustomEvent<WorkflowLogWsMessage>) => {
   const data = event.detail
+  const workflowId = data.workflow_id
+  const sequence = data.log.sequence
   
-  // Only process logs for the selected client's workflows
-  // TODO: Need to track which workflow belongs to which client
-  if (!workflowLogs.value.has(data.workflow_id)) {
-    workflowLogs.value.set(data.workflow_id, [])
+  // Sequence number is required - fail fast if missing
+  if (sequence === undefined) {
+    console.error(`[DNNELogViewer] Missing sequence number in log message for workflow ${workflowId}`)
+    throw new Error(`Log message missing required sequence number for workflow ${workflowId}`)
   }
   
-  const logs = workflowLogs.value.get(data.workflow_id)!
-  const logMessage = `[${new Date(data.log.timestamp * 1000).toISOString()}] [${data.log.level.toUpperCase()}] ${data.log.message}`
-  logs.push(logMessage)
+  // Check if we've received history for this workflow
+  if (!historyReceived.value.has(workflowId)) {
+    // Buffer the log until history arrives
+    if (!pendingLogs.value.has(workflowId)) {
+      pendingLogs.value.set(workflowId, [])
+    }
+    pendingLogs.value.get(workflowId)!.push(data)
+  } else {
+    // History received - we MUST have a last sequence
+    const lastSeq = lastSequences.value.get(workflowId)
+    if (lastSeq === undefined) {
+      // This should never happen - fail fast!
+      console.error(`[DNNELogViewer] No last sequence for workflow ${workflowId} even though history was received!`)
+      throw new Error(`Missing sequence tracking for workflow ${workflowId}`)
+    }
+    
+    if (sequence > lastSeq) {
+      // New log entry - add it
+      appendLogToDisplay(data)
+      lastSequences.value.set(workflowId, sequence)
+    }
+    // else: Skip duplicate (already in history) - this is expected
+  }
+}
+
+// Handle WebSocket workflow status messages
+const handleWorkflowStatus = (event: CustomEvent<WorkflowStatusWsMessage>) => {
+  const data = event.detail
   
-  // Update displayed logs if this is for the current client
-  updateDisplayedLogs()
+  // Update running status - deployed or running means active
+  if (data.status === 'deployed' || data.status === 'running') {
+    isWorkflowRunning.value = true
+    
+    // Request historical logs for this workflow
+    requestWorkflowLogs(data.workflow_id)
+  } else if (data.status === 'completed' || data.status === 'failed' || data.status === 'stopped') {
+    isWorkflowRunning.value = false
+  }
+}
+
+// Handle historical log response
+const handleWorkflowLogHistory = (event: CustomEvent) => {
+  const { workflow_id, logs, last_sequence } = event.detail
   
-  // Auto-scroll if enabled and not user scrolling
+  // Mark that we received history for this workflow
+  historyReceived.value.add(workflow_id)
+  lastSequences.value.set(workflow_id, last_sequence)
+  
+  // Display the historical logs
+  displayHistoricalLogs(logs)
+  
+  // Apply buffered logs that are newer than history
+  const buffered = pendingLogs.value.get(workflow_id) || []
+  const newLogs = buffered
+    .filter(log => {
+      // Sequence must exist if we got this far
+      if (log.log.sequence === undefined) {
+        throw new Error(`Buffered log missing sequence for workflow ${workflow_id}`)
+      }
+      return log.log.sequence > last_sequence
+    })
+    .sort((a, b) => {
+      // Sequences must exist if we got this far
+      if (a.log.sequence === undefined || b.log.sequence === undefined) {
+        throw new Error(`Buffered logs missing sequences for workflow ${workflow_id}`)
+      }
+      return a.log.sequence - b.log.sequence
+    }) // Ensure correct order
+  
+  newLogs.forEach(log => appendLogToDisplay(log))
+  
+  // Clear buffer for this workflow
+  pendingLogs.value.delete(workflow_id)
+}
+
+// Request historical logs via WebSocket
+const requestWorkflowLogs = (workflowId: string) => {
+  // Send request through WebSocket
+  if (api.socket && api.socket.readyState === WebSocket.OPEN) {
+    api.socket.send(JSON.stringify({
+      type: 'request_logs',
+      workflow_id: workflowId
+    }))
+  }
+}
+
+// Display historical logs
+const displayHistoricalLogs = (logs: string) => {
+  // Replace current content with historical logs
+  logContent.value = logs
+  
+  // Auto-scroll to bottom if enabled
+  if (autoScroll.value && logPre.value) {
+    nextTick(() => {
+      if (logPre.value) {
+        logPre.value.scrollTop = logPre.value.scrollHeight
+      }
+    })
+  }
+}
+
+// Append new log to display
+const appendLogToDisplay = (logMsg: WorkflowLogWsMessage) => {
+  const timestamp = new Date(logMsg.log.timestamp * 1000).toISOString()
+  const level = logMsg.log.level.toUpperCase()
+  const message = logMsg.log.message
+  
+  const logLine = `[${timestamp}] [${level}] ${message}\n`
+  logContent.value += logLine
+  
+  // Auto-scroll if enabled
   if (autoScroll.value && !userScrolling.value && logPre.value) {
     nextTick(() => {
       if (logPre.value) {
@@ -146,55 +260,22 @@ const handleWorkflowLog = (event: CustomEvent<WorkflowLogWsMessage>) => {
   }
 }
 
-// Handle WebSocket workflow status messages
-const handleWorkflowStatus = (event: CustomEvent<WorkflowStatusWsMessage>) => {
-  const data = event.detail
-  
-  // Update running status
-  if (data.status === 'running') {
-    isWorkflowRunning.value = true
-    
-    // Start a new log section for this workflow
-    if (!workflowLogs.value.has(data.workflow_id)) {
-      workflowLogs.value.set(data.workflow_id, [
-        `=== ${data.workflow_name || 'Workflow'} (${data.workflow_id}) ===`,
-        `Status: ${data.status}`,
-        `Started: ${new Date().toISOString()}`,
-        '=' .repeat(50)
-      ])
-    }
-  } else if (data.status === 'completed' || data.status === 'failed' || data.status === 'stopped') {
-    isWorkflowRunning.value = false
-    
-    // Add completion message
-    const logs = workflowLogs.value.get(data.workflow_id)
-    if (logs) {
-      logs.push('=' .repeat(50))
-      logs.push(`Status: ${data.status}`)
-      logs.push(`Ended: ${new Date().toISOString()}`)
-    }
-  }
-  
-  updateDisplayedLogs()
-}
-
-// Update displayed logs based on selected client and type
-const updateDisplayedLogs = () => {
-  // For now, show all logs since we don't have client-workflow mapping yet
-  // TODO: Filter by client when we have proper client-workflow tracking
-  const allLogs: string[] = []
-  workflowLogs.value.forEach((logs) => {
-    allLogs.push(...logs)
-  })
-  logContent.value = allLogs.join('\n')
-}
-
 // Handle client change
 const onClientChange = () => {
-  // Clear logs when switching clients
+  // Reset state for new client
   logContent.value = ''
-  workflowLogs.value.clear()
-  isWorkflowRunning.value = false
+  historyReceived.value.clear()
+  lastSequences.value.clear()
+  pendingLogs.value.clear()
+  
+  // Request logs for active workflows of this client
+  const clientWorkflows = agentStore.getClientWorkflows(selectedClientId.value)
+  clientWorkflows.forEach(wf => {
+    requestWorkflowLogs(wf.id)
+  })
+  
+  // Set running status if any workflows are active
+  isWorkflowRunning.value = clientWorkflows.length > 0
 }
 
 // Handle log type change
@@ -203,9 +284,8 @@ const onLogTypeChange = () => {
   // Telemetry would need separate handling
   if (selectedLogType.value === 'telemetry') {
     logContent.value = 'Telemetry logs not yet implemented for WebSocket streaming'
-  } else {
-    updateDisplayedLogs()
   }
+  // else: execution logs are already displayed
 }
 
 // Handle manual scrolling
@@ -244,13 +324,31 @@ watch(autoScroll, (enabled) => {
 // Setup WebSocket listeners when dialog opens
 watch(visible, (isVisible) => {
   if (isVisible) {
-    // Listen for live log updates
+    // Reset state
+    historyReceived.value.clear()
+    lastSequences.value.clear()
+    pendingLogs.value.clear()
+    
+    // Start listening for all events
     api.addEventListener('workflow_log', handleWorkflowLog as any)
     api.addEventListener('workflow_status', handleWorkflowStatus as any)
+    api.addEventListener('workflow_log_history', handleWorkflowLogHistory as any)
+    
+    // Request logs for currently active workflows
+    if (selectedClientId.value) {
+      const clientWorkflows = agentStore.getClientWorkflows(selectedClientId.value)
+      clientWorkflows.forEach(wf => {
+        requestWorkflowLogs(wf.id)
+      })
+      
+      // Set running status if any workflows are active
+      isWorkflowRunning.value = clientWorkflows.length > 0
+    }
   } else {
     // Stop listening when dialog closes
     api.removeEventListener('workflow_log', handleWorkflowLog as any)
     api.removeEventListener('workflow_status', handleWorkflowStatus as any)
+    api.removeEventListener('workflow_log_history', handleWorkflowLogHistory as any)
   }
 })
 
@@ -258,6 +356,7 @@ watch(visible, (isVisible) => {
 onUnmounted(() => {
   api.removeEventListener('workflow_log', handleWorkflowLog as any)
   api.removeEventListener('workflow_status', handleWorkflowStatus as any)
+  api.removeEventListener('workflow_log_history', handleWorkflowLogHistory as any)
 })
 </script>
 

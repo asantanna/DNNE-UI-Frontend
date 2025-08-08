@@ -27,6 +27,7 @@ import type {
   UserDataFullInfo,
   WorkflowStatusWsMessage,
   WorkflowLogWsMessage,
+  WorkflowLogHistoryWsMessage,
   ClientStatusUpdateWsMessage
 } from '@/schemas/apiSchema'
 import type {
@@ -113,6 +114,7 @@ interface BackendApiCalls {
   // DNNE Agent messages
   workflow_status: WorkflowStatusWsMessage
   workflow_log: WorkflowLogWsMessage
+  workflow_log_history: WorkflowLogHistoryWsMessage
   client_status_update: ClientStatusUpdateWsMessage
 }
 
@@ -477,6 +479,7 @@ export class ComfyApi extends EventTarget {
             case 'b_preview':
             case 'workflow_status':
             case 'workflow_log':
+            case 'workflow_log_history':
             case 'client_status_update':
               this.dispatchCustomEvent(msg.type, msg.data)
               break
