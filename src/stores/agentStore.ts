@@ -180,49 +180,71 @@ export const useAgentStore = defineStore('agent', () => {
   
   // WebSocket message handlers (to be connected later)
   function handleAgentMessage(message: any) {
-    // Handle the new unified client_status_update messages
-    if (message.type === 'client_status_update') {
-      const msgType = message.msg_type
+    // Handle the consolidated client_status messages
+    if (message.type === 'client_status') {
+      const status = message.status
       const clientId = message.client_id
       const hostname = message.client_hostname
       
-      switch (msgType) {
-        case 'client_connected':
-          addClient({
-            id: clientId,
-            hostname: hostname,
-            platform: message.platform || 'Unknown',
-            connected_at: message.timestamp
-          })
-          clientWorkflows.value.set(clientId, [])
-          break
-          
-        case 'client_disconnected':
-          removeClient(clientId)
-          clientWorkflows.value.delete(clientId)
-          break
-          
-        case 'workflow_started':
-        case 'workflow_stopped':
-          // Update workflow list for this client
-          const workflows: WorkflowInfo[] = message.active_workflow_details?.map((wf: any) => ({
-            id: wf.id || message.workflow_id,
-            name: wf.name,
-            start_time: wf.start_time
-          })) || []
-          
-          clientWorkflows.value.set(clientId, workflows)
-          
-          // Also update legacy activeWorkflows map for compatibility
-          if (msgType === 'workflow_started') {
-            activeWorkflows.value.set(message.workflow_id, {
-              clientId: clientId,
-              status: 'running'
-            })
-          } else {
-            activeWorkflows.value.delete(message.workflow_id)
+      if (status === 'connected') {
+        addClient({
+          id: clientId,
+          hostname: hostname,
+          platform: message.platform || 'Unknown',
+          connected_at: message.timestamp
+        })
+        clientWorkflows.value.set(clientId, [])
+      } else if (status === 'disconnected') {
+        removeClient(clientId)
+        clientWorkflows.value.delete(clientId)
+        // Remove any active workflows for this client
+        for (const [workflowId, wf] of activeWorkflows.value.entries()) {
+          if (wf.clientId === clientId) {
+            activeWorkflows.value.delete(workflowId)
           }
-          break
+        }
+      }
+    }
+    
+    // Handle workflow_status messages
+    else if (message.type === 'workflow_status') {
+      const workflowId = message.workflow_id
+      const clientId = message.client_id
+      const status = message.status
+      const workflowName = message.workflow_name
+      
+      if (status === 'running' || status === 'deployed') {
+        // Update activeWorkflows map
+        activeWorkflows.value.set(workflowId, {
+          clientId: clientId,
+          status: status
+        })
+        
+        // Update clientWorkflows map for status bar
+        if (!clientWorkflows.value.has(clientId)) {
+          clientWorkflows.value.set(clientId, [])
+        }
+        const workflows = clientWorkflows.value.get(clientId)!
+        // Add workflow if not already tracked
+        if (!workflows.find(w => w.id === workflowId)) {
+          workflows.push({
+            id: workflowId,
+            name: workflowName || 'Unknown',
+            start_time: new Date().toISOString()
+          })
+        }
+      } else if (status === 'completed' || status === 'failed' || status === 'stopped') {
+        // Remove from activeWorkflows
+        activeWorkflows.value.delete(workflowId)
+        
+        // Remove from clientWorkflows
+        if (clientWorkflows.value.has(clientId)) {
+          const workflows = clientWorkflows.value.get(clientId)!
+          const index = workflows.findIndex(w => w.id === workflowId)
+          if (index !== -1) {
+            workflows.splice(index, 1)
+          }
+        }
       }
     }
     

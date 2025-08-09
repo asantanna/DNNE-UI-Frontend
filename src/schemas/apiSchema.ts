@@ -117,18 +117,12 @@ const zWorkflowLogHistoryWsMessage = z.object({
   last_sequence: z.number()
 })
 
-const zClientStatusUpdateWsMessage = z.object({
-  msg_type: z.enum(['client_connected', 'client_disconnected', 'workflow_started', 'workflow_stopped']),
+// Consolidated client status message
+const zClientStatusWsMessage = z.object({
+  status: z.enum(['connected', 'disconnected']),
   client_id: z.string(),
   client_hostname: z.string(),
-  workflow_id: z.string().optional(),
-  workflow_name: z.string().optional(),
-  workflow_start_time: z.string().optional(),
-  active_workflows: z.number(),
-  active_workflow_details: z.array(z.object({
-    name: z.string(),
-    start_time: z.string()
-  })),
+  platform: z.string().optional(),
   timestamp: z.string()
 })
 
@@ -171,7 +165,7 @@ export type DisplayComponentWsMessage = z.infer<
 export type WorkflowStatusWsMessage = z.infer<typeof zWorkflowStatusWsMessage>
 export type WorkflowLogWsMessage = z.infer<typeof zWorkflowLogWsMessage>
 export type WorkflowLogHistoryWsMessage = z.infer<typeof zWorkflowLogHistoryWsMessage>
-export type ClientStatusUpdateWsMessage = z.infer<typeof zClientStatusUpdateWsMessage>
+export type ClientStatusWsMessage = z.infer<typeof zClientStatusWsMessage>
 // End of ws messages
 
 const zPromptInputItem = z.object({

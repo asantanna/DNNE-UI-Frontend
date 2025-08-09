@@ -42,9 +42,14 @@ const showContextMenu = (event: MouseEvent) => {
   }
 }
 
-// WebSocket event handler for client status updates
-const handleClientStatusUpdate = (event: CustomEvent) => {
-  agentStore.handleAgentMessage({ type: 'client_status_update', ...event.detail })
+// WebSocket event handler for client status
+const handleClientStatus = (event: CustomEvent) => {
+  agentStore.handleAgentMessage({ type: 'client_status', ...event.detail })
+}
+
+// WebSocket event handler for workflow status
+const handleWorkflowStatus = (event: CustomEvent) => {
+  agentStore.handleAgentMessage({ type: 'workflow_status', ...event.detail })
 }
 
 onMounted(() => {
@@ -57,11 +62,13 @@ onMounted(() => {
   }
   
   // Set up WebSocket event listeners for agent messages
-  api.addEventListener('client_status_update', handleClientStatusUpdate as any)
+  api.addEventListener('client_status', handleClientStatus as any)
+  api.addEventListener('workflow_status', handleWorkflowStatus as any)
 })
 
 onUnmounted(() => {
   // Clean up WebSocket event listeners
-  api.removeEventListener('client_status_update', handleClientStatusUpdate as any)
+  api.removeEventListener('client_status', handleClientStatus as any)
+  api.removeEventListener('workflow_status', handleWorkflowStatus as any)
 })
 </script>

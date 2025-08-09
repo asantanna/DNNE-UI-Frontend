@@ -200,7 +200,10 @@ const handleStop = () => {
 
 const showCurrentLogs = () => {
   // Show logs for the currently selected target
-  showLogViewer.value = true
+  if (!showLogViewer.value) {
+    showLogViewer.value = true
+  }
+  // If already open, the dialog remains visible without re-initializing
 }
 </script>
 

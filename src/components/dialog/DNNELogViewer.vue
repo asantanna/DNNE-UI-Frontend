@@ -12,7 +12,7 @@
     <template #header>
       <div class="flex items-center justify-between w-full">
         <span class="font-semibold flex items-center gap-1">
-          <span :class="['status-indicator', { 'running': isWorkflowRunning, 'disconnected': !isConnected }]">●</span>
+          <span :class="['status-indicator', { 'running': isWorkflowRunning, 'disconnected': !isConnected }]"></span>
           Remote Logs
         </span>
         <div class="flex items-center gap-2 ml-4">
@@ -173,6 +173,12 @@ const handleWorkflowStatus = (event: CustomEvent<WorkflowStatusWsMessage>) => {
   if (data.status === 'deployed' || data.status === 'running') {
     isWorkflowRunning.value = true
     
+    // Clear existing logs when a new workflow starts
+    logContent.value = ''
+    historyReceived.value.clear()
+    lastSequences.value.clear()
+    pendingLogs.value.clear()
+    
     // Request historical logs for this workflow
     requestWorkflowLogs(data.workflow_id)
   } else if (data.status === 'completed' || data.status === 'failed' || data.status === 'stopped') {
@@ -188,8 +194,8 @@ const handleWorkflowLogHistory = (event: CustomEvent) => {
   historyReceived.value.add(workflow_id)
   lastSequences.value.set(workflow_id, last_sequence)
   
-  // Display the historical logs
-  displayHistoricalLogs(logs)
+  // Display the historical logs (pass isActive based on current workflow state)
+  displayHistoricalLogs(logs, isWorkflowRunning.value)
   
   // Apply buffered logs that are newer than history
   const buffered = pendingLogs.value.get(workflow_id) || []
@@ -227,9 +233,21 @@ const requestWorkflowLogs = (workflowId: string) => {
 }
 
 // Display historical logs
-const displayHistoricalLogs = (logs: string) => {
-  // Replace current content with historical logs
-  logContent.value = logs
+const displayHistoricalLogs = (logs: string, isActive: boolean = true) => {
+  // Add warning header if this is a completed/stopped workflow
+  if (!isActive) {
+    // Extract the stopped timestamp if available
+    const stoppedMatch = logs.match(/# Stopped: (.+)/)
+    const stoppedTime = stoppedMatch ? stoppedMatch[1] : 'unknown time'
+    
+    const warningHeader = `${'='.repeat(60)}\nWARNING - Historical log - workflow ended at ${stoppedTime}\n${'='.repeat(60)}\n\n`
+    
+    // Add warning header before the logs
+    logContent.value = warningHeader + logs
+  } else {
+    // Active workflow - display logs as-is
+    logContent.value = logs
+  }
   
   // Auto-scroll to bottom if enabled
   if (autoScroll.value && logPre.value) {
@@ -453,15 +471,15 @@ onUnmounted(() => {
 }
 
 .status-indicator.running:not(.disconnected) {
-  animation: pulse 1.5s ease-in-out infinite;
+  animation: blink 0.75s ease-in-out infinite;
 }
 
-@keyframes pulse {
+@keyframes blink {
   0%, 100% {
     opacity: 1;
   }
   50% {
-    opacity: 0.5;
+    opacity: 0.1;
   }
 }
 

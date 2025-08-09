@@ -28,7 +28,7 @@ import type {
   WorkflowStatusWsMessage,
   WorkflowLogWsMessage,
   WorkflowLogHistoryWsMessage,
-  ClientStatusUpdateWsMessage
+  ClientStatusWsMessage
 } from '@/schemas/apiSchema'
 import type {
   ComfyApiWorkflow,
@@ -116,7 +116,7 @@ interface BackendApiCalls {
   workflow_status: WorkflowStatusWsMessage
   workflow_log: WorkflowLogWsMessage
   workflow_log_history: WorkflowLogHistoryWsMessage
-  client_status_update: ClientStatusUpdateWsMessage
+  client_status: ClientStatusWsMessage
 }
 
 /** Dictionary of all api calls */
@@ -481,7 +481,7 @@ export class ComfyApi extends EventTarget {
             case 'workflow_status':
             case 'workflow_log':
             case 'workflow_log_history':
-            case 'client_status_update':
+            case 'client_status':
               this.dispatchCustomEvent(msg.type, msg.data)
               break
             default:
