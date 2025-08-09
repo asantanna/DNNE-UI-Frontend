@@ -243,20 +243,38 @@ const displayHistoricalLogs = (logs: string) => {
 
 // Append new log to display
 const appendLogToDisplay = (logMsg: WorkflowLogWsMessage) => {
-  const timestamp = new Date(logMsg.log.timestamp * 1000).toISOString()
-  const level = logMsg.log.level.toUpperCase()
-  const message = logMsg.log.message
-  
-  const logLine = `[${timestamp}] [${level}] ${message}\n`
-  logContent.value += logLine
-  
-  // Auto-scroll if enabled
-  if (autoScroll.value && !userScrolling.value && logPre.value) {
-    nextTick(() => {
-      if (logPre.value) {
-        logPre.value.scrollTop = logPre.value.scrollHeight
-      }
-    })
+  try {
+    // Handle different timestamp formats
+    let timestamp: string
+    if (typeof logMsg.log.timestamp === 'string') {
+      // ISO string format (new format from updated client)
+      timestamp = new Date(logMsg.log.timestamp).toISOString()
+    } else if (typeof logMsg.log.timestamp === 'number') {
+      // Unix timestamp in seconds (old format)
+      timestamp = new Date(logMsg.log.timestamp * 1000).toISOString()
+    } else {
+      // Missing timestamp - this is an error
+      throw new Error(`Missing or invalid timestamp: ${logMsg.log.timestamp}`)
+    }
+    
+    const level = logMsg.log.level.toUpperCase()
+    const message = logMsg.log.message
+    
+    const logLine = `[${timestamp}] [${level}] ${message}\n`
+    logContent.value += logLine
+    
+    // Auto-scroll if enabled
+    if (autoScroll.value && !userScrolling.value && logPre.value) {
+      nextTick(() => {
+        if (logPre.value) {
+          logPre.value.scrollTop = logPre.value.scrollHeight
+        }
+      })
+    }
+  } catch (error) {
+    // Log error to console but still throw it (fail-fast as requested)
+    console.error('[DNNELogViewer] Error processing log message:', error)
+    throw error
   }
 }
 

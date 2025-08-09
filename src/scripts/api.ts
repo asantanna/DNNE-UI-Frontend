@@ -497,7 +497,11 @@ export class ComfyApi extends EventTarget {
           }
         }
       } catch (error) {
-        console.warn('Unhandled message:', event.data, error)
+        // Log error to console but still throw it (fail-fast as requested)
+        console.error('[WebSocket] Error processing message:', error)
+        
+        // Re-throw the error to maintain fail-fast behavior
+        throw error
       }
     })
   }
