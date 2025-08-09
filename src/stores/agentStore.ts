@@ -166,7 +166,7 @@ export const useAgentStore = defineStore('agent', () => {
   }
   
   function updateWorkflowStatus(workflowId: string, clientId: string, status: string) {
-    if (status === 'completed' || status === 'failed' || status === 'stopped') {
+    if (status === 'completed' || status === 'failed' || status === 'terminated') {
       activeWorkflows.value.delete(workflowId)
     } else {
       activeWorkflows.value.set(workflowId, { clientId, status })
@@ -233,7 +233,7 @@ export const useAgentStore = defineStore('agent', () => {
             start_time: new Date().toISOString()
           })
         }
-      } else if (status === 'completed' || status === 'failed' || status === 'stopped') {
+      } else if (status === 'completed' || status === 'failed' || status === 'terminated') {
         // Remove from activeWorkflows
         activeWorkflows.value.delete(workflowId)
         
