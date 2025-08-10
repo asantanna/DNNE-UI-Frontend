@@ -106,6 +106,8 @@ import Checkbox from 'primevue/checkbox'
 import { computed, ref, watch } from 'vue'
 import { useCommandStore } from '@/stores/commandStore'
 import DNNELogViewer from '@/components/dialog/DNNELogViewer.vue'
+import RunnerArgsDialogContent from '@/components/dialog/content/RunnerArgsDialogContent.vue'
+import { useDialogStore } from '@/stores/dialogStore'
 import {
   useQueuePendingTaskCountStore,
   useQueueSettingsStore
@@ -117,6 +119,7 @@ const queueCountStore = storeToRefs(useQueuePendingTaskCountStore())
 const { mode: queueMode } = storeToRefs(useQueueSettingsStore())
 const agentStore = useAgentStore()
 const commandStore = useCommandStore()
+const dialogStore = useDialogStore()
 
 // Export target management
 const exportTargets = computed(() => agentStore.exportTargets)
@@ -178,11 +181,36 @@ const queuePrompt = async (e: Event) => {
   workspaceStore.exportTarget = selectedTargetId.value
   workspaceStore.runAfterExport = runAfterExport.value
   
-  const commandId =
-    'shiftKey' in e && e.shiftKey
-      ? 'Comfy.QueuePromptFront'
-      : 'Comfy.QueuePrompt'
-  await commandStore.execute(commandId)
+  // If run_after_export is enabled and not local, show runner args dialog
+  if (runAfterExport.value && selectedTargetId.value !== 'local') {
+    dialogStore.showDialog({
+      key: 'runner-args-dialog',
+      title: 'Configure Runner Arguments',
+      component: RunnerArgsDialogContent,
+      props: {
+        onConfirm: async (runnerArgs: string) => {
+          // Store the runner arguments
+          workspaceStore.runnerArgs = runnerArgs
+          
+          // Execute the export command
+          const commandId =
+            'shiftKey' in e && e.shiftKey
+              ? 'Comfy.QueuePromptFront'
+              : 'Comfy.QueuePrompt'
+          await commandStore.execute(commandId)
+        }
+      }
+    })
+  } else {
+    // No runner args needed, proceed with export
+    workspaceStore.runnerArgs = ''
+    
+    const commandId =
+      'shiftKey' in e && e.shiftKey
+        ? 'Comfy.QueuePromptFront'
+        : 'Comfy.QueuePrompt'
+    await commandStore.execute(commandId)
+  }
 }
 
 const handleStop = () => {

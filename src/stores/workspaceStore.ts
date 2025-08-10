@@ -32,6 +32,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
    * Whether to run the workflow immediately after export
    */
   const runAfterExport = ref<boolean>(false)
+  /**
+   * Command-line arguments for runner.py when run_after_export is enabled
+   */
+  const runnerArgs = ref<string>('')
 
   const toast = computed<ToastManager>(() => useToastStore())
   const queueSettings = computed(() => useQueueSettingsStore())
@@ -98,6 +102,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     focusMode,
     exportTarget,
     runAfterExport,
+    runnerArgs,
     toggleFocusMode: () => {
       focusMode.value = !focusMode.value
     },

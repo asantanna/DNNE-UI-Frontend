@@ -1240,7 +1240,7 @@ export class ComfyApp {
             const workspaceStore = useWorkspaceStore()
             // Get the workflow path if available
             const workflowPath = workspaceStore.workflow?.activeWorkflow?.path
-            const res = await api.queuePrompt(number, p, workspaceStore.exportTarget, workspaceStore.runAfterExport, workflowPath)
+            const res = await api.queuePrompt(number, p, workspaceStore.exportTarget, workspaceStore.runAfterExport, workflowPath, workspaceStore.runnerArgs)
             delete api.authToken
             delete api.apiKey
             executionStore.lastNodeErrors = res.node_errors ?? null
