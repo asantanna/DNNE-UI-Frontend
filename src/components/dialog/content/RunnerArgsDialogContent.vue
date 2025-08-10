@@ -262,6 +262,8 @@ async function loadRunnerArgsConfig() {
               defaults[argName] = argConfig.default
             } else if (argConfig.type === 'checkbox') {
               defaults[argName] = false
+            } else if (argConfig.type === 'number') {
+              defaults[argName] = null
             } else {
               defaults[argName] = ''
             }
@@ -301,6 +303,19 @@ console.log('=== RunnerArgsDialogContent component loaded ===')
 console.log('Props received:', props)
 </script>
 
+<style>
+/* Global styles for command line input - not scoped to ensure they apply */
+.command-line-input.readonly-mode {
+  background-color: #252525 !important;
+  color: #c0c0c0 !important;
+}
+
+.command-line-input.edit-mode {
+  background-color: white !important;
+  color: #000000 !important;
+}
+</style>
+
 <style scoped>
 .runner-args-dialog-content {
   padding: 1rem;
@@ -310,6 +325,8 @@ console.log('Props received:', props)
   border: 1px solid #e0e0e0;
   border-radius: 0.5rem;
   padding: 1rem;
+  position: relative;
+  z-index: 1;
 }
 
 .arguments-grid {
@@ -318,15 +335,5 @@ console.log('Props received:', props)
 
 .column {
   min-width: 0; /* Prevent column overflow */
-}
-
-.command-line-input.readonly-mode {
-  background-color: #f3f4f6 !important;
-  color: #6b7280 !important;
-}
-
-.command-line-input.edit-mode {
-  background-color: white !important;
-  color: black !important;
 }
 </style>

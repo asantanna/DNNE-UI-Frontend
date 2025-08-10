@@ -20,6 +20,7 @@
         optionValue="value"
         class="flex-shrink-0"
         style="width: 150px"
+        appendTo="self"
       />
       <InputText
         v-if="selectedOption === 'custom'"

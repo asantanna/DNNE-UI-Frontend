@@ -19,6 +19,7 @@
       optionValue="value"
       :placeholder="argument.placeholder || 'Select...'"
       :class="{ 'flex-1': labelOnSameLine, 'w-full': !labelOnSameLine }"
+      appendTo="self"
     />
   </div>
 </template>
