@@ -59,6 +59,5 @@ templates_repo/
 vite.config.mts.timestamp-*.mjs
 
 # build assets
-dist/assets/
-dist/index.html
+dist/
 

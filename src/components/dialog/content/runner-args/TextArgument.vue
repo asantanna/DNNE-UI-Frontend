@@ -7,8 +7,8 @@
     <InputText
       :id="`arg-${argName}`"
       :modelValue="modelValue"
-      @update:modelValue="$emit('update:modelValue', $event)"
-      :placeholder="String(argument.placeholder || argument.default || '')"
+      @update:modelValue="$emit('update:modelValue', String($event || ''))"
+      :placeholder="String(argument.placeholder ?? argument.default ?? '')"
       class="w-full"
     />
   </div>
