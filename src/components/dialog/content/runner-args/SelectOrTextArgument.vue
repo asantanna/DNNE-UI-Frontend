@@ -1,10 +1,17 @@
 <template>
-  <div class="mb-3">
-    <label :for="`arg-${argName}`" class="block mb-1">
-      <span class="font-medium text-sm">{{ argument.label }}</span>
-      <span class="text-xs text-gray-600 ml-2">{{ argument.description }}</span>
+  <div :class="{ 
+    'flex items-center gap-2': labelOnSameLine,
+    'mb-3': !labelOnSameLine 
+  }">
+    <label :for="`arg-${argName}`" 
+           :class="{ 
+             'text-sm min-w-[140px]': labelOnSameLine,
+             'block text-sm mb-1': !labelOnSameLine
+           }"
+           v-tooltip="argument.description">
+      {{ argument.label }}
     </label>
-    <div class="flex gap-2">
+    <div class="flex gap-2" :class="{ 'flex-1': labelOnSameLine, 'w-full': !labelOnSameLine }">
       <Dropdown
         :id="`arg-${argName}-select`"
         v-model="selectedOption"
@@ -40,29 +47,35 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
 
+// Default label_on_same_line to true if not specified
+const labelOnSameLine = computed(() => props.argument.label_on_same_line !== false)
+
 const dropdownOptions = computed(() => {
   const options = [
     { label: 'None', value: '' },
     ...(props.argument.options || []).map((opt: string) => ({
-      label: opt === 'all' ? 'All' : opt.charAt(0).toUpperCase() + opt.slice(1),
+      label: opt === 'all' ? 'All' : opt === 'custom' ? 'Custom' : opt.charAt(0).toUpperCase() + opt.slice(1),
       value: opt
     }))
   ]
   return options
 })
 
-const selectedOption = ref('')
-const customValue = ref('')
-
-// Initialize from modelValue
-if (props.modelValue) {
-  if (props.argument.options?.includes(props.modelValue) || props.modelValue === '') {
-    selectedOption.value = props.modelValue
-  } else {
-    selectedOption.value = 'custom'
-    customValue.value = props.modelValue
+// Initialize values properly
+const initOption = () => {
+  if (!props.modelValue || props.modelValue === '') {
+    return ''
   }
+  if (props.argument.options?.includes(props.modelValue)) {
+    return props.modelValue
+  }
+  return 'custom'
 }
+
+const selectedOption = ref(initOption())
+const customValue = ref(
+  selectedOption.value === 'custom' ? props.modelValue : ''
+)
 
 // Watch for changes and emit
 watch([selectedOption, customValue], () => {

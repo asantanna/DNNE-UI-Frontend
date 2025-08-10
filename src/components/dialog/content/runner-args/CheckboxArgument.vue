@@ -6,9 +6,10 @@
       :inputId="`arg-${argName}`"
       binary
     />
-    <label :for="`arg-${argName}`" class="ml-2">
-      <span class="font-medium">{{ argument.label }}</span>
-      <span class="text-sm text-gray-600 ml-2">{{ argument.description }}</span>
+    <label :for="`arg-${argName}`" 
+           class="ml-2 text-sm"
+           v-tooltip="argument.description">
+      {{ argument.label }}
     </label>
   </div>
 </template>

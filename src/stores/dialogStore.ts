@@ -134,15 +134,28 @@ export const useDialogStore = defineStore('dialog', () => {
   }
 
   function showDialog(options: ShowDialogOptions) {
+    console.log('=== dialogStore.showDialog called ===')
+    console.log('Options:', options)
+    console.log('Dialog key:', options.key)
+    console.log('Component:', options.component)
+    console.log('Props:', options.props)
+    
     const dialogKey = options.key || genDialogKey()
+    console.log('Final dialog key:', dialogKey)
 
     let dialog = dialogStack.value.find((d) => d.key === dialogKey)
+    console.log('Existing dialog found?', !!dialog)
+    console.log('Current dialogStack length:', dialogStack.value.length)
 
     if (dialog) {
+      console.log('Making existing dialog visible')
       dialog.visible = true
       riseDialog(dialog)
     } else {
+      console.log('Creating new dialog')
       dialog = createDialog({ ...options, key: dialogKey })
+      console.log('Dialog created:', dialog)
+      console.log('New dialogStack length:', dialogStack.value.length)
     }
     return dialog
   }

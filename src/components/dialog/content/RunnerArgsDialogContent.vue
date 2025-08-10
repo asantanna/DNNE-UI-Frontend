@@ -1,44 +1,58 @@
 <template>
-  <div class="runner-args-dialog-content">
+  <div class="runner-args-dialog-content" :style="{ width: dialogWidth, minWidth: dialogWidth }">
     <!-- Command Line Preview -->
-    <div class="command-preview-section mb-4">
+    <div class="mb-4">
       <label class="block text-sm font-medium mb-2">Command Line Arguments:</label>
-      <InputText 
-        v-model="commandLine"
-        :readonly="!overrideMode"
-        class="w-full font-mono text-sm"
-        :class="{ 'bg-gray-100': !overrideMode }"
-      />
-      <div class="flex items-center mt-2">
+      <div class="flex items-center gap-2">
+        <InputText 
+          v-model="commandLine"
+          :readonly="!overrideMode"
+          class="flex-1 font-mono text-sm command-line-input"
+          :class="{ 
+            'readonly-mode': !overrideMode,
+            'edit-mode': overrideMode
+          }"
+        />
         <Checkbox 
           v-model="overrideMode" 
           inputId="override-args"
           binary
         />
-        <label for="override-args" class="ml-2 text-sm">
-          Override Arguments (Manual Edit)
-        </label>
+        <label for="override-args" class="text-sm">Override</label>
       </div>
     </div>
 
-    <!-- Argument Groups (hidden in override mode) -->
-    <div v-if="!overrideMode && runnerArgsConfig" class="arguments-section">
-      <ScrollPanel style="height: 400px">
-        <div v-for="group in sortedGroups" :key="group.name" class="mb-4">
-          <h3 class="text-sm font-semibold mb-2 text-gray-700">{{ group.label }}</h3>
-          <div class="pl-2">
-            <div v-for="argName in getArgumentsForGroup(group.name)" :key="argName" class="mb-3">
-              <component 
-                :is="getComponentForArgument(runnerArgsConfig.arguments[argName])"
-                :argument="runnerArgsConfig.arguments[argName]"
-                :argName="argName"
-                v-model="argumentValues[argName]"
-                @update:modelValue="onArgumentChange"
-              />
-            </div>
+    <!-- Arguments (disabled in override mode) -->
+    <div v-if="runnerArgsConfig" 
+         class="arguments-section"
+         :class="{ 'opacity-50 pointer-events-none': overrideMode }">
+      <div class="arguments-grid" :style="gridStyle">
+        <!-- Column 1 -->
+        <div class="column">
+          <div v-for="arg in getArgumentsForColumn(1)" :key="arg.name" class="mb-2">
+            <component 
+              :is="getComponentForArgument(arg.config)"
+              :argument="arg.config"
+              :argName="arg.name"
+              v-model="argumentValues[arg.name]"
+              @update:modelValue="onArgumentChange"
+            />
           </div>
         </div>
-      </ScrollPanel>
+        
+        <!-- Column 2 (if columns > 1) -->
+        <div v-if="layoutColumns > 1" class="column">
+          <div v-for="arg in getArgumentsForColumn(2)" :key="arg.name" class="mb-2">
+            <component 
+              :is="getComponentForArgument(arg.config)"
+              :argument="arg.config"
+              :argName="arg.name"
+              v-model="argumentValues[arg.name]"
+              @update:modelValue="onArgumentChange"
+            />
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Loading state -->
@@ -67,7 +81,6 @@ import { ref, computed, onMounted } from 'vue'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Checkbox from 'primevue/checkbox'
-import ScrollPanel from 'primevue/scrollpanel'
 import ProgressSpinner from 'primevue/progressspinner'
 import { useDialogStore } from '@/stores/dialogStore'
 import { api } from '@/scripts/api'
@@ -76,29 +89,31 @@ import { api } from '@/scripts/api'
 import CheckboxArgument from './runner-args/CheckboxArgument.vue'
 import TextArgument from './runner-args/TextArgument.vue'
 import NumberArgument from './runner-args/NumberArgument.vue'
+import SelectArgument from './runner-args/SelectArgument.vue'
 import SelectOrTextArgument from './runner-args/SelectOrTextArgument.vue'
 
 interface RunnerArgsConfig {
+  layout?: {
+    columns?: number
+    dialogWidth?: string
+    dialogMaxHeight?: string
+  }
   arguments: Record<string, ArgumentConfig>
   argument_order: string[]
-  groups: Record<string, GroupConfig>
 }
 
 interface ArgumentConfig {
   switch: string
   shortSwitch?: string
-  type: 'checkbox' | 'text' | 'number' | 'select_or_text'
+  type: 'checkbox' | 'text' | 'number' | 'select' | 'select_or_text'
   label: string
   description: string
   default?: any
   options?: string[]
   placeholder?: string
-  group: string
-}
-
-interface GroupConfig {
-  label: string
+  column: number
   order: number
+  label_on_same_line?: boolean
 }
 
 const props = defineProps<{
@@ -119,13 +134,18 @@ const commandLine = computed({
   }
 })
 
-const sortedGroups = computed(() => {
-  if (!runnerArgsConfig.value) return []
-  
-  return Object.entries(runnerArgsConfig.value.groups)
-    .map(([name, config]) => ({ name, ...config }))
-    .sort((a, b) => a.order - b.order)
-})
+// Layout configuration from JSON
+const layoutColumns = computed(() => runnerArgsConfig.value?.layout?.columns || 1)
+const dialogWidth = computed(() => runnerArgsConfig.value?.layout?.dialogWidth || '600px')
+const dialogMaxHeight = computed(() => runnerArgsConfig.value?.layout?.dialogMaxHeight || '80vh')
+
+const gridStyle = computed(() => ({
+  display: 'grid',
+  gridTemplateColumns: `repeat(${layoutColumns.value}, 1fr)`,
+  gap: '1rem',
+  maxHeight: dialogMaxHeight.value,
+  overflowY: 'auto' as const
+}))
 
 const isValid = computed(() => {
   if (overrideMode.value) {
@@ -135,14 +155,14 @@ const isValid = computed(() => {
   return true // All arguments are optional
 })
 
-function getArgumentsForGroup(groupName: string): string[] {
+function getArgumentsForColumn(column: number) {
   if (!runnerArgsConfig.value) return []
   
-  // Use argument_order to maintain consistent ordering
-  return runnerArgsConfig.value.argument_order.filter(argName => {
-    const arg = runnerArgsConfig.value!.arguments[argName]
-    return arg && arg.group === groupName
-  })
+  // Get all arguments for the specified column and sort by order
+  return Object.entries(runnerArgsConfig.value.arguments)
+    .filter(([_, config]) => config.column === column)
+    .sort((a, b) => a[1].order - b[1].order)
+    .map(([name, config]) => ({ name, config }))
 }
 
 function getComponentForArgument(arg: ArgumentConfig) {
@@ -153,6 +173,8 @@ function getComponentForArgument(arg: ArgumentConfig) {
       return TextArgument
     case 'number':
       return NumberArgument
+    case 'select':
+      return SelectArgument
     case 'select_or_text':
       return SelectOrTextArgument
     default:
@@ -169,6 +191,14 @@ function generateCommandLine(): string {
     const config = runnerArgsConfig.value.arguments[argName]
     const value = argumentValues.value[argName]
     
+    // Special handling for logging field
+    if (argName === 'logging') {
+      if (value && value !== 'off') {
+        args.push(`--verbose ${value}`)
+      }
+      continue
+    }
+    
     if (value === undefined || value === null || value === false || value === '') {
       continue // Skip unset arguments
     }
@@ -183,6 +213,9 @@ function generateCommandLine(): string {
       } else if (value && value !== 'custom') {
         args.push(`${config.switch} ${value}`)
       }
+    } else if (config.type === 'select') {
+      // Regular select dropdown
+      args.push(`${config.switch} ${value}`)
     } else {
       // text or number type
       args.push(`${config.switch} ${value}`)
@@ -259,26 +292,41 @@ async function loadRunnerArgsConfig() {
 }
 
 onMounted(() => {
+  console.log('=== RunnerArgsDialogContent mounted ===')
   loadRunnerArgsConfig()
 })
+
+// Also log when component is created
+console.log('=== RunnerArgsDialogContent component loaded ===')
+console.log('Props received:', props)
 </script>
 
 <style scoped>
 .runner-args-dialog-content {
   padding: 1rem;
-  min-width: 600px;
-  max-width: 800px;
-}
-
-.command-preview-section {
-  background: #f8f9fa;
-  padding: 1rem;
-  border-radius: 0.5rem;
 }
 
 .arguments-section {
   border: 1px solid #e0e0e0;
   border-radius: 0.5rem;
   padding: 1rem;
+}
+
+.arguments-grid {
+  padding: 0.5rem;
+}
+
+.column {
+  min-width: 0; /* Prevent column overflow */
+}
+
+.command-line-input.readonly-mode {
+  background-color: #f3f4f6 !important;
+  color: #6b7280 !important;
+}
+
+.command-line-input.edit-mode {
+  background-color: white !important;
+  color: black !important;
 }
 </style>

@@ -28,8 +28,8 @@
       </Dropdown>
     </div>
 
-    <!-- Export Button -->
-    <Button
+    <!-- Export SplitButton -->
+    <SplitButton
       v-tooltip.bottom="{
         value: 'Export workflow',
         showDelay: 600
@@ -40,12 +40,13 @@
       data-testid="export-button"
       :disabled="isExportDisabled"
       @click="queuePrompt"
+      :model="exportMenuItems"
     >
       <template #icon>
         <i-lucide:upload v-if="selectedExportTarget.type === 'remote'" />
         <i-lucide:save v-else />
       </template>
-    </Button>
+    </SplitButton>
 
     <!-- Run After Export Checkbox -->
     <div class="flex items-center"
@@ -101,6 +102,7 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
 import Button from 'primevue/button'
+import SplitButton from 'primevue/splitbutton'
 import Dropdown from 'primevue/dropdown'
 import Checkbox from 'primevue/checkbox'
 import { computed, ref, watch } from 'vue'
@@ -138,6 +140,17 @@ const previousRunAfterExport = ref(true)  // Default true for first remote selec
 // Log viewer state
 const showLogViewer = ref(false)
 
+// Export menu items for SplitButton
+const exportMenuItems = ref([
+  {
+    label: 'Export with Arguments...',
+    icon: 'pi pi-cog',
+    command: () => {
+      queuePromptWithArgs()
+    }
+  }
+])
+
 // Workflow state
 const isRunning = computed(() => {
   // Check if there's an active workflow for the selected target
@@ -164,31 +177,67 @@ const isStopDisabled = computed(() => !isRunning.value && !hasPendingTasks.value
 
 // Watch for target changes to manage checkbox state
 watch(selectedTargetId, (newTarget, oldTarget) => {
+  console.log('=== Target changed ===')
+  console.log('Old target:', oldTarget)
+  console.log('New target:', newTarget)
+  console.log('Current runAfterExport:', runAfterExport.value)
+  
   if (newTarget === 'local') {
     // Save current state and disable
+    console.log('Target is local, disabling runAfterExport')
     previousRunAfterExport.value = runAfterExport.value
     runAfterExport.value = false
   } else if (oldTarget === 'local') {
     // Restore previous state when switching from local
+    console.log('Switching from local, restoring runAfterExport to:', previousRunAfterExport.value)
     runAfterExport.value = previousRunAfterExport.value
   }
+  
+  console.log('Final runAfterExport:', runAfterExport.value)
 })
 
 
 // Actions
 const queuePrompt = async (e: Event) => {
+  console.log('=== queuePrompt START ===')
+  console.log('Event type:', e.type)
+  console.log('Event shiftKey:', 'shiftKey' in e ? e.shiftKey : 'N/A')
+  
   // Store the selected export target and run_after_export flag
+  console.log('selectedTargetId.value (before store):', selectedTargetId.value)
+  console.log('runAfterExport.value (before store):', runAfterExport.value)
+  console.log('selectedExportTarget:', selectedExportTarget.value)
+  
   workspaceStore.exportTarget = selectedTargetId.value
   workspaceStore.runAfterExport = runAfterExport.value
   
+  console.log('workspaceStore.exportTarget (after store):', workspaceStore.exportTarget)
+  console.log('workspaceStore.runAfterExport (after store):', workspaceStore.runAfterExport)
+  
   // If run_after_export is enabled and not local, show runner args dialog
+  console.log('--- Dialog condition check ---')
+  console.log('runAfterExport.value:', runAfterExport.value)
+  console.log('typeof runAfterExport.value:', typeof runAfterExport.value)
+  console.log('selectedTargetId.value:', selectedTargetId.value)
+  console.log('typeof selectedTargetId.value:', typeof selectedTargetId.value)
+  console.log('Condition result:', runAfterExport.value && selectedTargetId.value !== 'local')
+  
   if (runAfterExport.value && selectedTargetId.value !== 'local') {
-    dialogStore.showDialog({
+    console.log('>>> SHOULD SHOW DIALOG <<<')
+    console.log('dialogStore exists?', !!dialogStore)
+    console.log('dialogStore.showDialog exists?', !!dialogStore.showDialog)
+    console.log('RunnerArgsDialogContent exists?', !!RunnerArgsDialogContent)
+    
+    try {
+      console.log('Calling dialogStore.showDialog...')
+      dialogStore.showDialog({
       key: 'runner-args-dialog',
       title: 'Configure Runner Arguments',
       component: RunnerArgsDialogContent,
       props: {
         onConfirm: async (runnerArgs: string) => {
+          console.log('>>> Dialog onConfirm called <<<')
+          console.log('Runner args received:', runnerArgs)
           // Store the runner arguments
           workspaceStore.runnerArgs = runnerArgs
           
@@ -197,11 +246,22 @@ const queuePrompt = async (e: Event) => {
             'shiftKey' in e && e.shiftKey
               ? 'Comfy.QueuePromptFront'
               : 'Comfy.QueuePrompt'
+          console.log('Executing command:', commandId)
           await commandStore.execute(commandId)
+          console.log('Command executed')
         }
       }
     })
+      console.log('dialogStore.showDialog call completed')
+    } catch (error) {
+      console.error('ERROR calling dialogStore.showDialog:', error)
+      console.error('Error stack:', (error as Error).stack)
+    }
   } else {
+    console.log('>>> SKIPPING DIALOG <<<')
+    console.log('Reason: condition not met')
+    console.log('runAfterExport.value:', runAfterExport.value)
+    console.log('selectedTargetId.value:', selectedTargetId.value)
     // No runner args needed, proceed with export
     workspaceStore.runnerArgs = ''
     
@@ -211,6 +271,35 @@ const queuePrompt = async (e: Event) => {
         : 'Comfy.QueuePrompt'
     await commandStore.execute(commandId)
   }
+}
+
+// Export with arguments - always shows dialog
+const queuePromptWithArgs = async () => {
+  console.log('=== queuePromptWithArgs START ===')
+  
+  // Store the selected export target and run_after_export flag
+  workspaceStore.exportTarget = selectedTargetId.value
+  workspaceStore.runAfterExport = runAfterExport.value
+  
+  // Show runner args dialog
+  console.log('>>> SHOWING RUNNER ARGS DIALOG <<<')
+  dialogStore.showDialog({
+    key: 'runner-args-dialog',
+    title: 'Configure Runner Arguments',
+    component: RunnerArgsDialogContent,
+    props: {
+      onConfirm: async (runnerArgs: string) => {
+        console.log('>>> Dialog onConfirm called <<<')
+        console.log('Runner args received:', runnerArgs)
+        // Store the runner arguments
+        workspaceStore.runnerArgs = runnerArgs
+        
+        // Execute the export command
+        await commandStore.execute('Comfy.QueuePrompt')
+        console.log('Command executed')
+      }
+    }
+  })
 }
 
 const handleStop = () => {
