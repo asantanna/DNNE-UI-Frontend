@@ -96,13 +96,21 @@ const pendingLogs = ref<Map<string, WorkflowLogWsMessage[]>>(new Map()) // Buffe
 const historyReceived = ref<Set<string>>(new Set()) // Track which workflows received history
 const lastSequences = ref<Map<string, number>>(new Map()) // Last sequence per workflow
 
+// Telemetry content storage
+const telemetryViolationsContent = ref<string>('')
+const telemetryDataContent = ref<string>('')
+const telemetryPollInterval = ref<number | null>(null)
+// Track if we're actively listening to execution logs
+const listeningToExecutionLogs = ref(true)
+
 // Connection status - check if agent is connected
 const isConnected = computed(() => agentStore.isConnected)
 
 // Log types
 const logTypes = [
-  { label: 'Execution', value: 'execution' },
-  { label: 'Telemetry', value: 'telemetry' }
+  { label: 'Run Logs', value: 'execution' },
+  { label: 'Telemetry Violations', value: 'telemetry_violations' },
+  { label: 'Telemetry Data', value: 'telemetry_data' }
 ]
 
 // Get remote clients with display property for dropdown
@@ -296,43 +304,129 @@ const appendLogToDisplay = (logMsg: WorkflowLogWsMessage) => {
   }
 }
 
+// Telemetry methods
+const requestTelemetryLogs = (telemetryType: 'violations' | 'data') => {
+  if (api.socket && api.socket.readyState === WebSocket.OPEN) {
+    const clientWorkflows = agentStore.getClientWorkflows(selectedClientId.value)
+    if (clientWorkflows.length > 0) {
+      api.socket.send(JSON.stringify({
+        type: 'request_telemetry',
+        workflow_id: clientWorkflows[0].id,
+        client_id: selectedClientId.value,
+        telemetry_type: telemetryType
+      }))
+    }
+  }
+}
+
+const startTelemetryPolling = (telemetryType: 'violations' | 'data') => {
+  requestTelemetryLogs(telemetryType)
+  telemetryPollInterval.value = window.setInterval(() => {
+    if (isWorkflowRunning.value) {
+      requestTelemetryLogs(telemetryType)
+    }
+  }, 5000)
+}
+
+const stopTelemetryPolling = () => {
+  if (telemetryPollInterval.value) {
+    clearInterval(telemetryPollInterval.value)
+    telemetryPollInterval.value = null
+  }
+}
+
+const handleTelemetryHistory = (event: CustomEvent) => {
+  // Server sends data wrapped in a 'data' field
+  const data = event.detail.data || event.detail
+  const { telemetry_type, content } = data
+  
+  if (telemetry_type === 'violations') {
+    telemetryViolationsContent.value = content
+    if (selectedLogType.value === 'telemetry_violations') {
+      logContent.value = content
+    }
+  } else if (telemetry_type === 'data') {
+    telemetryDataContent.value = content
+    if (selectedLogType.value === 'telemetry_data') {
+      logContent.value = content
+    }
+  }
+}
+
 // Handle client change
 const onClientChange = () => {
-  // Reset state for new client
+  // Clear all content
   logContent.value = ''
+  telemetryViolationsContent.value = ''
+  telemetryDataContent.value = ''
   historyReceived.value.clear()
   lastSequences.value.clear()
   pendingLogs.value.clear()
   
-  // Request logs for active workflows of this client
-  const clientWorkflows = agentStore.getClientWorkflows(selectedClientId.value)
-  if (clientWorkflows.length > 0) {
-    // Request logs for each active workflow
-    clientWorkflows.forEach(wf => {
-      requestWorkflowLogs(wf.id)
-    })
-    isWorkflowRunning.value = true
-  } else {
-    // No active workflows - request latest historical logs
-    if (api.socket && api.socket.readyState === WebSocket.OPEN) {
-      api.socket.send(JSON.stringify({
-        type: 'request_logs',
-        workflow_id: null,
-        client_id: selectedClientId.value
-      }))
-    }
-    isWorkflowRunning.value = false
-  }
+  // Stop any telemetry polling
+  stopTelemetryPolling()
+  
+  // Trigger appropriate refresh based on current view
+  onLogTypeChange()
 }
 
 // Handle log type change
 const onLogTypeChange = () => {
-  // For now, we only show execution logs via WebSocket
-  // Telemetry would need separate handling
-  if (selectedLogType.value === 'telemetry') {
-    logContent.value = 'Telemetry logs not yet implemented for WebSocket streaming'
+  // Stop any existing polling
+  stopTelemetryPolling()
+  
+  if (selectedLogType.value === 'execution') {
+    // Clear current content and request fresh from server
+    logContent.value = ''
+    historyReceived.value.clear()
+    lastSequences.value.clear()
+    pendingLogs.value.clear()
+    
+    // Start listening to execution logs if not already
+    if (!listeningToExecutionLogs.value) {
+      api.addEventListener('workflow_log', handleWorkflowLog as any)
+      listeningToExecutionLogs.value = true
+    }
+    
+    // Request fresh logs from server
+    const clientWorkflows = agentStore.getClientWorkflows(selectedClientId.value)
+    if (clientWorkflows.length > 0) {
+      clientWorkflows.forEach(wf => {
+        requestWorkflowLogs(wf.id)
+      })
+      isWorkflowRunning.value = true
+    } else {
+      // Request latest historical logs
+      if (api.socket && api.socket.readyState === WebSocket.OPEN) {
+        api.socket.send(JSON.stringify({
+          type: 'request_logs',
+          workflow_id: null,
+          client_id: selectedClientId.value
+        }))
+      }
+      isWorkflowRunning.value = false
+    }
+  } else if (selectedLogType.value === 'telemetry_violations') {
+    // Stop listening to execution logs
+    if (listeningToExecutionLogs.value) {
+      api.removeEventListener('workflow_log', handleWorkflowLog as any)
+      listeningToExecutionLogs.value = false
+    }
+    
+    // Show violations and start polling
+    logContent.value = telemetryViolationsContent.value
+    startTelemetryPolling('violations')
+  } else if (selectedLogType.value === 'telemetry_data') {
+    // Stop listening to execution logs
+    if (listeningToExecutionLogs.value) {
+      api.removeEventListener('workflow_log', handleWorkflowLog as any)
+      listeningToExecutionLogs.value = false
+    }
+    
+    // Show data and start polling
+    logContent.value = telemetryDataContent.value
+    startTelemetryPolling('data')
   }
-  // else: execution logs are already displayed
 }
 
 // Handle manual scrolling
@@ -371,6 +465,9 @@ watch(autoScroll, (enabled) => {
 // Setup WebSocket listeners when dialog opens
 watch(visible, (isVisible) => {
   if (isVisible) {
+    // Always default to Run Logs when opening
+    selectedLogType.value = 'execution'
+    
     // Reset state
     historyReceived.value.clear()
     lastSequences.value.clear()
@@ -380,6 +477,7 @@ watch(visible, (isVisible) => {
     api.addEventListener('workflow_log', handleWorkflowLog as any)
     api.addEventListener('workflow_status', handleWorkflowStatus as any)
     api.addEventListener('workflow_log_history', handleWorkflowLogHistory as any)
+    api.addEventListener('telemetry_history', handleTelemetryHistory as any)
     
     // Request logs for currently active workflows or latest historical logs
     if (selectedClientId.value) {
@@ -407,6 +505,8 @@ watch(visible, (isVisible) => {
     api.removeEventListener('workflow_log', handleWorkflowLog as any)
     api.removeEventListener('workflow_status', handleWorkflowStatus as any)
     api.removeEventListener('workflow_log_history', handleWorkflowLogHistory as any)
+    api.removeEventListener('telemetry_history', handleTelemetryHistory as any)
+    stopTelemetryPolling()
   }
 })
 
@@ -415,6 +515,8 @@ onUnmounted(() => {
   api.removeEventListener('workflow_log', handleWorkflowLog as any)
   api.removeEventListener('workflow_status', handleWorkflowStatus as any)
   api.removeEventListener('workflow_log_history', handleWorkflowLogHistory as any)
+  api.removeEventListener('telemetry_history', handleTelemetryHistory as any)
+  stopTelemetryPolling()
 })
 </script>
 
@@ -453,7 +555,7 @@ onUnmounted(() => {
 }
 
 .log-type-dropdown {
-  width: 120px;
+  width: 180px;
 }
 
 .status-indicator {

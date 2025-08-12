@@ -117,6 +117,21 @@ const zWorkflowLogHistoryWsMessage = z.object({
   last_sequence: z.number()
 })
 
+// Telemetry history message
+const zTelemetryHistoryWsMessage = z.object({
+  workflow_id: z.string().nullable(),
+  telemetry_type: z.enum(['violations', 'data']),
+  content: z.string(),
+  timestamp: z.number()
+})
+
+// Workflow exists response message
+const zWorkflowExistsResponseWsMessage = z.object({
+  client_id: z.string(),
+  workflow_id: z.string(),
+  exists: z.boolean()
+})
+
 // Consolidated client status message
 const zClientStatusWsMessage = z.object({
   status: z.enum(['connected', 'disconnected']),
@@ -165,6 +180,8 @@ export type DisplayComponentWsMessage = z.infer<
 export type WorkflowStatusWsMessage = z.infer<typeof zWorkflowStatusWsMessage>
 export type WorkflowLogWsMessage = z.infer<typeof zWorkflowLogWsMessage>
 export type WorkflowLogHistoryWsMessage = z.infer<typeof zWorkflowLogHistoryWsMessage>
+export type TelemetryHistoryWsMessage = z.infer<typeof zTelemetryHistoryWsMessage>
+export type WorkflowExistsResponseWsMessage = z.infer<typeof zWorkflowExistsResponseWsMessage>
 export type ClientStatusWsMessage = z.infer<typeof zClientStatusWsMessage>
 // End of ws messages
 

@@ -34,34 +34,30 @@
         value: 'Export workflow',
         showDelay: 600
       }"
-      label="Export"
+      :label="getButtonLabel()"
       severity="primary"
       size="small"
       data-testid="export-button"
       :disabled="isExportDisabled"
-      @click="queuePrompt"
+      @click="handleAction"
       :model="exportMenuItems"
-    >
-      <template #icon>
-        <i-lucide:upload v-if="selectedExportTarget.type === 'remote'" />
-        <i-lucide:save v-else />
-      </template>
-    </SplitButton>
+      :menuButtonDisabled="selectedTargetId === 'local'"
+    />
 
-    <!-- Run After Export Checkbox -->
+    <!-- Custom Args Checkbox -->
     <div class="flex items-center"
       v-tooltip.bottom="{
-        value: 'Run workflow after export',
+        value: 'Use custom runner arguments',
         showDelay: 600
       }">
       <Checkbox
-        v-model="runAfterExport"
-        inputId="run-after-export"
+        v-model="useCustomArgs"
+        inputId="use-custom-args"
         binary
-        :disabled="isRunAfterExportDisabled"
+        :disabled="selectedTargetId === 'local'"
       />
-      <label for="run-after-export" class="ml-2 text-sm cursor-pointer">
-        Run after export
+      <label for="use-custom-args" class="ml-2 text-sm cursor-pointer">
+        Custom args
       </label>
     </div>
 
@@ -110,6 +106,7 @@ import { useCommandStore } from '@/stores/commandStore'
 import DNNELogViewer from '@/components/dialog/DNNELogViewer.vue'
 import RunnerArgsDialogContent from '@/components/dialog/content/RunnerArgsDialogContent.vue'
 import { useDialogStore } from '@/stores/dialogStore'
+import { api } from '@/scripts/api'
 import {
   useQueuePendingTaskCountStore,
   useQueueSettingsStore
@@ -133,23 +130,40 @@ const selectedExportTarget = computed(() =>
   exportTargets.value.find(t => t.id === selectedTargetId.value) || exportTargets.value[0]
 )
 
-// Run after export state
-const runAfterExport = ref(false)
-const previousRunAfterExport = ref(true)  // Default true for first remote selection
+// Custom args state
+const useCustomArgs = ref(false)
+const previousUseCustomArgs = ref(false)
+
+// Export/Run mode state
+type ExportMode = 'export' | 'export-and-run' | 'run-only'
+const exportMode = ref<ExportMode>('export')
 
 // Log viewer state
 const showLogViewer = ref(false)
 
 // Export menu items for SplitButton
-const exportMenuItems = ref([
-  {
-    label: 'Export with Arguments...',
-    icon: 'pi pi-cog',
-    command: () => {
-      queuePromptWithArgs()
-    }
+const exportMenuItems = computed(() => {
+  if (selectedTargetId.value === 'local') {
+    // Local only has Export option
+    return []
+  } else {
+    // Remote has Deploy, Deploy and Run, Run Only
+    return [
+      {
+        label: 'Deploy',
+        command: () => { exportMode.value = 'export' }
+      },
+      {
+        label: 'Deploy and Run',
+        command: () => { exportMode.value = 'export-and-run' }
+      },
+      {
+        label: 'Run Only',
+        command: () => { exportMode.value = 'run-only' }
+      }
+    ]
   }
-])
+})
 
 // Workflow state
 const isRunning = computed(() => {
@@ -171,135 +185,262 @@ const hasLogs = computed(() => {
 })
 
 // Computed properties for disabled states
-const isRunAfterExportDisabled = computed(() => selectedTargetId.value === 'local')
 const isExportDisabled = computed(() => isRunning.value)
 const isStopDisabled = computed(() => !isRunning.value && !hasPendingTasks.value)
 
-// Watch for target changes to manage checkbox state
-watch(selectedTargetId, (newTarget, oldTarget) => {
-  console.log('=== Target changed ===')
-  console.log('Old target:', oldTarget)
-  console.log('New target:', newTarget)
-  console.log('Current runAfterExport:', runAfterExport.value)
-  
-  if (newTarget === 'local') {
-    // Save current state and disable
-    console.log('Target is local, disabling runAfterExport')
-    previousRunAfterExport.value = runAfterExport.value
-    runAfterExport.value = false
-  } else if (oldTarget === 'local') {
-    // Restore previous state when switching from local
-    console.log('Switching from local, restoring runAfterExport to:', previousRunAfterExport.value)
-    runAfterExport.value = previousRunAfterExport.value
-  }
-  
-  console.log('Final runAfterExport:', runAfterExport.value)
-})
-
-
-// Actions
-const queuePrompt = async (e: Event) => {
-  console.log('=== queuePrompt START ===')
-  console.log('Event type:', e.type)
-  console.log('Event shiftKey:', 'shiftKey' in e ? e.shiftKey : 'N/A')
-  
-  // Store the selected export target and run_after_export flag
-  console.log('selectedTargetId.value (before store):', selectedTargetId.value)
-  console.log('runAfterExport.value (before store):', runAfterExport.value)
-  console.log('selectedExportTarget:', selectedExportTarget.value)
-  
-  workspaceStore.exportTarget = selectedTargetId.value
-  workspaceStore.runAfterExport = runAfterExport.value
-  
-  console.log('workspaceStore.exportTarget (after store):', workspaceStore.exportTarget)
-  console.log('workspaceStore.runAfterExport (after store):', workspaceStore.runAfterExport)
-  
-  // If run_after_export is enabled and not local, show runner args dialog
-  console.log('--- Dialog condition check ---')
-  console.log('runAfterExport.value:', runAfterExport.value)
-  console.log('typeof runAfterExport.value:', typeof runAfterExport.value)
-  console.log('selectedTargetId.value:', selectedTargetId.value)
-  console.log('typeof selectedTargetId.value:', typeof selectedTargetId.value)
-  console.log('Condition result:', runAfterExport.value && selectedTargetId.value !== 'local')
-  
-  if (runAfterExport.value && selectedTargetId.value !== 'local') {
-    console.log('>>> SHOULD SHOW DIALOG <<<')
-    console.log('dialogStore exists?', !!dialogStore)
-    console.log('dialogStore.showDialog exists?', !!dialogStore.showDialog)
-    console.log('RunnerArgsDialogContent exists?', !!RunnerArgsDialogContent)
-    
-    try {
-      console.log('Calling dialogStore.showDialog...')
-      dialogStore.showDialog({
-      key: 'runner-args-dialog',
-      title: 'Configure Runner Arguments',
-      component: RunnerArgsDialogContent,
-      props: {
-        onConfirm: async (runnerArgs: string) => {
-          console.log('>>> Dialog onConfirm called <<<')
-          console.log('Runner args received:', runnerArgs)
-          // Store the runner arguments
-          workspaceStore.runnerArgs = runnerArgs
-          
-          // Execute the export command
-          const commandId =
-            'shiftKey' in e && e.shiftKey
-              ? 'Comfy.QueuePromptFront'
-              : 'Comfy.QueuePrompt'
-          console.log('Executing command:', commandId)
-          await commandStore.execute(commandId)
-          console.log('Command executed')
-        }
-      }
-    })
-      console.log('dialogStore.showDialog call completed')
-    } catch (error) {
-      console.error('ERROR calling dialogStore.showDialog:', error)
-      console.error('Error stack:', (error as Error).stack)
-    }
+// Get button label based on mode and target
+const getButtonLabel = () => {
+  if (selectedTargetId.value === 'local') {
+    return 'Export'
   } else {
-    console.log('>>> SKIPPING DIALOG <<<')
-    console.log('Reason: condition not met')
-    console.log('runAfterExport.value:', runAfterExport.value)
-    console.log('selectedTargetId.value:', selectedTargetId.value)
-    // No runner args needed, proceed with export
-    workspaceStore.runnerArgs = ''
-    
-    const commandId =
-      'shiftKey' in e && e.shiftKey
-        ? 'Comfy.QueuePromptFront'
-        : 'Comfy.QueuePrompt'
-    await commandStore.execute(commandId)
+    // Remote client selected
+    switch (exportMode.value) {
+      case 'export': return 'Deploy Only'
+      case 'export-and-run': return 'Deploy and Run'
+      case 'run-only': return 'Run Only'
+      default: return 'Deploy Only'
+    }
   }
 }
 
-// Export with arguments - always shows dialog
-const queuePromptWithArgs = async () => {
-  console.log('=== queuePromptWithArgs START ===')
+// Watch for target changes to manage checkbox state
+watch(selectedTargetId, (newTarget, oldTarget) => {
+  if (newTarget === 'local') {
+    // Save current state and disable
+    previousUseCustomArgs.value = useCustomArgs.value
+    useCustomArgs.value = false
+    // Reset mode to export for local
+    exportMode.value = 'export'
+  } else if (oldTarget === 'local') {
+    // Restore previous state when switching from local
+    useCustomArgs.value = previousUseCustomArgs.value
+    // Set to "Deploy and Run" mode for remote (usually desired)
+    exportMode.value = 'export-and-run'
+  }
+  // When switching between remote clients, don't change the mode
+})
+
+
+// Main action handler
+const handleAction = async (e: Event) => {
+  switch (exportMode.value) {
+    case 'export':
+      if (useCustomArgs.value && selectedTargetId.value !== 'local') {
+        await performExportWithArgs(false)
+      } else {
+        await performExport(e, false)
+      }
+      break
+    case 'export-and-run':
+      if (useCustomArgs.value) {
+        await performExportWithArgs(true)
+      } else {
+        await performExport(e, true)
+      }
+      break
+    case 'run-only':
+      if (useCustomArgs.value) {
+        await performRunWithArgs()
+      } else {
+        await performRun()
+      }
+      break
+  }
+}
+
+// Simple export without args
+const performExport = async (e: Event, runAfter: boolean) => {
+  console.log('=== performExport START ===')
+  console.log('Event type:', e.type)
+  console.log('Event shiftKey:', 'shiftKey' in e ? e.shiftKey : 'N/A')
+  console.log('Run after:', runAfter)
   
   // Store the selected export target and run_after_export flag
   workspaceStore.exportTarget = selectedTargetId.value
-  workspaceStore.runAfterExport = runAfterExport.value
+  workspaceStore.runAfterExport = runAfter
+  workspaceStore.runnerArgs = '' // No args for normal export
+  
+  // Execute the export command
+  const commandId =
+    'shiftKey' in e && e.shiftKey
+      ? 'Comfy.QueuePromptFront'
+      : 'Comfy.QueuePrompt'
+  await commandStore.execute(commandId)
+}
+
+// Export with arguments - shows dialog
+const performExportWithArgs = async (runAfter: boolean) => {
+  console.log('=== performExportWithArgs START ===')
+  console.log('Run after:', runAfter)
+  
+  // Store the selected export target and run_after_export flag
+  workspaceStore.exportTarget = selectedTargetId.value
+  workspaceStore.runAfterExport = runAfter
+  
+  // Get button text for dialog
+  const buttonText = getButtonLabel()
   
   // Show runner args dialog
-  console.log('>>> SHOWING RUNNER ARGS DIALOG <<<')
   dialogStore.showDialog({
     key: 'runner-args-dialog',
     title: 'Configure Runner Arguments',
     component: RunnerArgsDialogContent,
     props: {
+      buttonText,
       onConfirm: async (runnerArgs: string) => {
-        console.log('>>> Dialog onConfirm called <<<')
         console.log('Runner args received:', runnerArgs)
         // Store the runner arguments
         workspaceStore.runnerArgs = runnerArgs
         
         // Execute the export command
         await commandStore.execute('Comfy.QueuePrompt')
-        console.log('Command executed')
       }
     }
   })
+}
+
+// Run workflow without args
+const performRun = async () => {
+  console.log('=== performRun START ===')
+  
+  const clientId = selectedTargetId.value
+  
+  if (clientId === 'local') {
+    // For local, just run the workflow (assume it exists)
+    await runWorkflow(false)
+  } else {
+    // For remote, check if deployed
+    const exists = await checkWorkflowExists(clientId)
+    if (!exists) {
+      const client = agentStore.clients.get(clientId)
+      const hostname = client?.hostname || clientId
+      // Show error message using toast or alert
+      console.error(`Workflow not found on ${hostname}, please deploy first.`)
+      alert(`Workflow not found on ${hostname}, please deploy first.`)
+      return
+    }
+    
+    await runWorkflow(false)
+  }
+}
+
+// Check if workflow exists on remote
+const checkWorkflowExists = async (clientId: string): Promise<boolean> => {
+  console.log('Checking if workflow exists on', clientId)
+  
+  // Send WebSocket message to check
+  if (api.socket && api.socket.readyState === WebSocket.OPEN) {
+    // Generate workflow ID from current workflow content
+    const workflow = workspaceStore.workflow
+    if (!workflow) return false
+    
+    // Calculate workflow ID (hash of content)
+    const workflowJson = JSON.stringify(workflow, null, 2)
+    const encoder = new TextEncoder()
+    const data = encoder.encode(workflowJson)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+    const workflowId = `wf_${hashHex.substring(0, 12)}`
+    
+    return new Promise((resolve) => {
+      // Set up one-time listener for response
+      const handler = (event: CustomEvent) => {
+        const detail = event.detail.data || event.detail
+        if (detail.client_id === clientId && 
+            detail.workflow_id === workflowId) {
+          api.removeEventListener('workflow_exists_response', handler as any)
+          resolve(detail.exists)
+        }
+      }
+      api.addEventListener('workflow_exists_response', handler as any)
+      
+      // Send check request
+      if (api.socket) {
+        api.socket.send(JSON.stringify({
+          type: 'check_workflow_exists',
+          client_id: clientId,
+          workflow_id: workflowId
+        }))
+      }
+      
+      // Timeout after 5 seconds
+      setTimeout(() => {
+        api.removeEventListener('workflow_exists_response', handler as any)
+        resolve(false)
+      }, 5000)
+    })
+  }
+  return false
+}
+
+// Run workflow with args - shows dialog
+const performRunWithArgs = async () => {
+  console.log('=== performRunWithArgs START ===')
+  
+  const clientId = selectedTargetId.value
+  
+  if (clientId === 'local') {
+    // For local, just run the workflow (assume it exists)
+    await runWorkflow(true)
+  } else {
+    // For remote, check if deployed
+    const exists = await checkWorkflowExists(clientId)
+    if (!exists) {
+      const client = agentStore.clients.get(clientId)
+      const hostname = client?.hostname || clientId
+      // Show error message using toast or alert
+      console.error(`Workflow not found on ${hostname}, please deploy first.`)
+      alert(`Workflow not found on ${hostname}, please deploy first.`)
+      return
+    }
+    
+    await runWorkflow(true)
+  }
+}
+
+// Run the workflow (assumes it exists)
+const runWorkflow = async (withArgs: boolean) => {
+  if (withArgs) {
+    const buttonText = 'Run Only'
+    dialogStore.showDialog({
+      key: 'runner-args-dialog',
+      title: 'Configure Runner Arguments',
+      component: RunnerArgsDialogContent,
+      props: {
+        buttonText,
+        onConfirm: async (runnerArgs: string) => {
+          await sendRunCommand(runnerArgs)
+        }
+      }
+    })
+  } else {
+    await sendRunCommand('')
+  }
+}
+
+// Send run command to server
+const sendRunCommand = async (runnerArgs: string) => {
+  if (api.socket && api.socket.readyState === WebSocket.OPEN) {
+    // Calculate workflow ID
+    const workflow = workspaceStore.workflow
+    if (!workflow) return
+    
+    const workflowJson = JSON.stringify(workflow, null, 2)
+    const encoder = new TextEncoder()
+    const data = encoder.encode(workflowJson)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+    const workflowId = `wf_${hashHex.substring(0, 12)}`
+    
+    api.socket.send(JSON.stringify({
+      type: 'run_workflow',
+      client_id: selectedTargetId.value,
+      workflow_id: workflowId,
+      runner_args: runnerArgs
+    }))
+  }
 }
 
 const handleStop = () => {

@@ -28,6 +28,8 @@ import type {
   WorkflowStatusWsMessage,
   WorkflowLogWsMessage,
   WorkflowLogHistoryWsMessage,
+  TelemetryHistoryWsMessage,
+  WorkflowExistsResponseWsMessage,
   ClientStatusWsMessage
 } from '@/schemas/apiSchema'
 import type {
@@ -117,7 +119,10 @@ interface BackendApiCalls {
   workflow_status: WorkflowStatusWsMessage
   workflow_log: WorkflowLogWsMessage
   workflow_log_history: WorkflowLogHistoryWsMessage
+  telemetry_history: TelemetryHistoryWsMessage
+  workflow_exists_response: WorkflowExistsResponseWsMessage
   client_status: ClientStatusWsMessage
+  runner_args: any // Runner args configuration from server
 }
 
 /** Dictionary of all api calls */
@@ -482,7 +487,9 @@ export class ComfyApi extends EventTarget {
             case 'workflow_status':
             case 'workflow_log':
             case 'workflow_log_history':
+            case 'telemetry_history':
             case 'client_status':
+            case 'runner_args':
               this.dispatchCustomEvent(msg.type, msg.data)
               break
             default:

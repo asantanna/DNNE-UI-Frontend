@@ -12,6 +12,7 @@
             'readonly-mode': !overrideMode,
             'edit-mode': overrideMode
           }"
+          @keyup.enter="onEnterKey"
         />
         <Checkbox 
           v-model="overrideMode" 
@@ -68,7 +69,7 @@
         @click="onCancel"
       />
       <Button 
-        label="Export with Arguments" 
+        :label="props.buttonText || 'Export with Arguments'" 
         @click="onConfirm"
         :disabled="!isValid"
       />
@@ -83,6 +84,7 @@ import InputText from 'primevue/inputtext'
 import Checkbox from 'primevue/checkbox'
 import ProgressSpinner from 'primevue/progressspinner'
 import { useDialogStore } from '@/stores/dialogStore'
+import { useAgentStore } from '@/stores/agentStore'
 import { api } from '@/scripts/api'
 
 // Import argument input components
@@ -118,9 +120,11 @@ interface ArgumentConfig {
 
 const props = defineProps<{
   onConfirm: (args: string) => void
+  buttonText?: string
 }>()
 
 const dialogStore = useDialogStore()
+const agentStore = useAgentStore()
 const runnerArgsConfig = ref<RunnerArgsConfig | null>(null)
 const argumentValues = ref<Record<string, any>>({})
 const overrideMode = ref(false)
@@ -234,8 +238,34 @@ function onCancel() {
   dialogStore.closeDialog()
 }
 
+function onEnterKey() {
+  // Only trigger confirm if in override mode and valid
+  if (overrideMode.value && isValid.value) {
+    onConfirm()
+  }
+}
+
 function onConfirm() {
   const finalArgs = overrideMode.value ? manualCommandLine.value : generateCommandLine()
+  
+  // Save state to agentStore
+  const clientId = agentStore.selectedTarget
+  if (overrideMode.value) {
+    // If override is checked, save the custom args and override state
+    agentStore.setClientRunnerArgs(clientId, {
+      override: true,
+      customArgs: manualCommandLine.value,
+      argumentValues: {} // Don't save argument values in override mode
+    })
+  } else {
+    // If override is unchecked, save the argument values but not custom args
+    agentStore.setClientRunnerArgs(clientId, {
+      override: false,
+      customArgs: '', // Don't save custom args when not in override
+      argumentValues: { ...argumentValues.value }
+    })
+  }
+  
   props.onConfirm(finalArgs)
   dialogStore.closeDialog()
 }
@@ -247,16 +277,14 @@ async function loadRunnerArgsConfig() {
       type: 'request_runner_args'
     }))
     
-    // Listen for response
-    const handleMessage = (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data)
-        if (data.type === 'runner_args') {
-          runnerArgsConfig.value = data.data
+    // Listen for response using API event
+    const handleRunnerArgs = (event: CustomEvent) => {
+      const data = event.detail
+      runnerArgsConfig.value = data
           
           // Initialize default values
           const defaults: Record<string, any> = {}
-          for (const [argName, config] of Object.entries(data.data.arguments)) {
+          for (const [argName, config] of Object.entries(data.arguments)) {
             const argConfig = config as ArgumentConfig
             if (argConfig.default !== undefined) {
               defaults[argName] = argConfig.default
@@ -268,22 +296,33 @@ async function loadRunnerArgsConfig() {
               defaults[argName] = ''
             }
           }
-          argumentValues.value = defaults
+          // Load saved state if available
+          const clientId = agentStore.selectedTarget
+          const savedState = agentStore.getClientRunnerArgs(clientId)
+          
+          if (savedState) {
+            overrideMode.value = savedState.override
+            if (savedState.override) {
+              manualCommandLine.value = savedState.customArgs
+              argumentValues.value = defaults // Use defaults when in override
+            } else {
+              argumentValues.value = { ...defaults, ...savedState.argumentValues }
+              manualCommandLine.value = '' // Clear manual command line
+            }
+          } else {
+            argumentValues.value = defaults
+          }
           
           // Remove listener after receiving response
-          api.socket?.removeEventListener('message', handleMessage)
-        }
-      } catch (e) {
-        console.error('Error parsing WebSocket message:', e)
-      }
+          api.removeEventListener('runner_args', handleRunnerArgs as any)
     }
     
-    api.socket?.addEventListener('message', handleMessage)
+    api.addEventListener('runner_args', handleRunnerArgs as any)
     
     // Timeout after 5 seconds
     setTimeout(() => {
       if (!runnerArgsConfig.value) {
-        api.socket?.removeEventListener('message', handleMessage)
+        api.removeEventListener('runner_args', handleRunnerArgs as any)
         console.error('Timeout loading runner args configuration')
       }
     }, 5000)

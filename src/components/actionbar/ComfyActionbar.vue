@@ -84,10 +84,11 @@ const setInitialPosition = () => {
     }
 
     // If no stored position or current position, set to bottom center
+    // Raise initial position by 50% more to avoid overlapping status bar
     if (x.value === 0 && y.value === 0) {
       x.value = clamp((screenWidth - menuWidth) / 2, 0, screenWidth - menuWidth)
       y.value = clamp(
-        screenHeight - menuHeight - 10,
+        screenHeight - menuHeight - 60,  // Increased from 10 to 60 (50px higher)
         0,
         screenHeight - menuHeight
       )

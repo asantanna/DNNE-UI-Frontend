@@ -28,6 +28,13 @@ interface WorkflowInfo {
   start_time: string
 }
 
+// Per-client runner args state
+interface RunnerArgsState {
+  override: boolean
+  customArgs: string
+  argumentValues: Record<string, any>
+}
+
 export const useAgentStore = defineStore('agent', () => {
   // State
   const clients = ref<Map<string, AgentClient>>(new Map())
@@ -35,6 +42,7 @@ export const useAgentStore = defineStore('agent', () => {
   const activeWorkflows = ref<Map<string, { clientId: string; status: string }>>(new Map())
   const selectedTarget = ref<string>('local')
   const clientWorkflows = ref<Map<string, WorkflowInfo[]>>(new Map())  // Track workflows per client
+  const clientRunnerArgs = ref<Map<string, RunnerArgsState>>(new Map())  // Track runner args per client
   
   // Initialize connection status
   // Real data will come from backend via WebSocket and API
@@ -178,6 +186,15 @@ export const useAgentStore = defineStore('agent', () => {
     return clientWorkflows.value.get(clientId) || []
   }
   
+  // Runner args state management
+  function getClientRunnerArgs(clientId: string): RunnerArgsState | undefined {
+    return clientRunnerArgs.value.get(clientId)
+  }
+  
+  function setClientRunnerArgs(clientId: string, args: RunnerArgsState) {
+    clientRunnerArgs.value.set(clientId, args)
+  }
+  
   // WebSocket message handlers (to be connected later)
   function handleAgentMessage(message: any) {
     // Handle the consolidated client_status messages
@@ -287,6 +304,7 @@ export const useAgentStore = defineStore('agent', () => {
     activeWorkflows,
     selectedTarget,
     clientWorkflows,
+    clientRunnerArgs,
     
     // Getters
     isConnected,
@@ -305,6 +323,8 @@ export const useAgentStore = defineStore('agent', () => {
     selectTarget,
     updateWorkflowStatus,
     getClientWorkflows,
-    handleAgentMessage
+    handleAgentMessage,
+    getClientRunnerArgs,
+    setClientRunnerArgs
   }
 })
