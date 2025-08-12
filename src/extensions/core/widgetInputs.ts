@@ -242,7 +242,7 @@ export class PrimitiveNode extends LGraphNode {
     }
 
     if (
-      !inputData?.[1]?.control_after_generate &&
+      !inputData?.[1]?.seed_control &&
       (widget.type === 'number' || widget.type === 'combo')
     ) {
       let control_value = this.widgets_values?.[1]

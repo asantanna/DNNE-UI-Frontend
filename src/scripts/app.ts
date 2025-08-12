@@ -1147,7 +1147,7 @@ export class ComfyApp {
             node.type == 'KSamplerAdvanced' ||
             node.type == 'PrimitiveNode'
           ) {
-            if (widget.name == 'control_after_generate') {
+            if (widget.name == 'seed_control') {
               if (widget.value === true) {
                 widget.value = 'randomize'
               } else if (widget.value === false) {

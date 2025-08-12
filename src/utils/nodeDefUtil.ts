@@ -22,7 +22,7 @@ const IGNORE_KEYS = new Set<string>([
   'default',
   'forceInput',
   'defaultInput',
-  'control_after_generate',
+  'seed_control',
   'multiline',
   'tooltip',
   'dynamicPrompts'

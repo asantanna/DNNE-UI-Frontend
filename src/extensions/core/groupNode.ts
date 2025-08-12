@@ -461,7 +461,7 @@ export class GroupNodeConfig {
 
     if (inputName === 'seed' || inputName === 'noise_seed') {
       if (!extra) extra = {}
-      extra.control_after_generate = `${prefix}control_after_generate`
+      extra.seed_control = `${prefix}seed_control`
     }
     if (config[0] === 'IMAGEUPLOAD') {
       if (!extra) extra = {}
@@ -546,7 +546,7 @@ export class GroupNodeConfig {
       // @ts-expect-error fixme ts strict error
       let name = this.oldToNewWidgetMap[sourceNodeId]['value']
       name = name.substr(0, name.length - 6)
-      primitiveConfig[1].control_after_generate = true
+      primitiveConfig[1].seed_control = true
       primitiveConfig[1].control_prefix = name
 
       // @ts-expect-error fixme ts strict error

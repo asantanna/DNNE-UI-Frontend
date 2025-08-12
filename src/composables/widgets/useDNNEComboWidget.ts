@@ -3,7 +3,6 @@ import type { IComboWidget } from '@comfyorg/litegraph/dist/types/widgets'
 import { ref } from 'vue'
 
 import MultiSelectWidget from '@/components/graph/widgets/MultiSelectWidget.vue'
-import { transformInputSpecV2ToV1 } from '@/schemas/nodeDef/migration'
 import {
   ComboInputSpec,
   type InputSpec,
@@ -15,8 +14,7 @@ import {
   addWidget
 } from '@/scripts/domWidget'
 import {
-  type ComfyWidgetConstructorV2,
-  addValueControlWidgets
+  type ComfyWidgetConstructorV2
 } from '@/scripts/widgets'
 import { api } from '@/scripts/api'
 import { app } from '@/scripts/app'
@@ -122,15 +120,7 @@ const addDNNEComboWidget = (node: LGraphNode, inputSpec: ComboInputSpec) => {
     })
   }
 
-  if (inputSpec.control_after_generate) {
-    widget.linkedWidgets = addValueControlWidgets(
-      node,
-      widget,
-      undefined,
-      undefined,
-      transformInputSpecV2ToV1(inputSpec)
-    )
-  }
+  // No special handling for seed_control - it's just a regular dropdown
 
   return widget
 }
@@ -332,15 +322,7 @@ const addComboWidget = (node: LGraphNode, inputSpec: ComboInputSpec) => {
     })
   }
 
-  if (inputSpec.control_after_generate) {
-    widget.linkedWidgets = addValueControlWidgets(
-      node,
-      widget,
-      undefined,
-      undefined,
-      transformInputSpecV2ToV1(inputSpec)
-    )
-  }
+  // No special handling for seed_control - it's just a regular dropdown
 
   return widget
 }

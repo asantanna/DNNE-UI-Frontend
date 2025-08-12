@@ -64,7 +64,7 @@ export function updateControlWidgetLabel(widget: IBaseWidget) {
   if (controlValueRunBefore()) {
     widget.label = t('g.control_before_generate')
   } else {
-    widget.label = t('g.control_after_generate')
+    widget.label = t('g.seed_control')
   }
 }
 
@@ -79,7 +79,7 @@ export function addValueControlWidget(
   widgetName?: string,
   inputData?: InputSpec
 ): IComboWidget {
-  let name = inputData?.[1]?.control_after_generate
+  let name = inputData?.[1]?.seed_control
   if (typeof name !== 'string') {
     name = widgetName
   }
@@ -120,7 +120,7 @@ export function addValueControlWidgets(
 
   const valueControl = node.addWidget(
     'combo',
-    getName('control_after_generate', 'controlAfterGenerateName'),
+    getName('seed_control', 'controlAfterGenerateName'),
     defaultValue,
     function () {},
     {

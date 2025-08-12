@@ -44,9 +44,9 @@ export const zNumericInputOptions = zBaseInputOptions.extend({
 export const zIntInputOptions = zNumericInputOptions.extend({
   /**
    * If true, a linked widget will be added to the node to select the mode
-   * of `control_after_generate`.
+   * of `seed_control`.
    */
-  control_after_generate: z.boolean().optional()
+  seed_control: z.boolean().optional()
 })
 
 export const zFloatInputOptions = zNumericInputOptions.extend({
@@ -70,7 +70,7 @@ export const zStringInputOptions = zBaseInputOptions.extend({
 })
 
 export const zComboInputOptions = zBaseInputOptions.extend({
-  control_after_generate: z.boolean().optional(),
+  seed_control: z.boolean().optional(),
   image_upload: z.boolean().optional(),
   image_folder: z.enum(['input', 'output', 'temp']).optional(),
   allow_batch: z.boolean().optional(),

@@ -1,14 +1,12 @@
 import type { LGraphNode } from '@comfyorg/litegraph'
 import type { INumericWidget } from '@comfyorg/litegraph/dist/types/widgets'
 
-import { transformInputSpecV2ToV1 } from '@/schemas/nodeDef/migration'
 import {
   type InputSpec,
   isIntInputSpec
 } from '@/schemas/nodeDef/nodeDefSchemaV2'
 import {
-  type ComfyWidgetConstructorV2,
-  addValueControlWidget
+  type ComfyWidgetConstructorV2
 } from '@/scripts/widgets'
 import { useSettingStore } from '@/stores/settingStore'
 
@@ -72,25 +70,7 @@ export const useIntWidget = () => {
       }
     )
 
-    const controlAfterGenerate =
-      inputSpec.control_after_generate ??
-      /**
-       * Compatibility with legacy node convention. Int input with name
-       * 'seed' or 'noise_seed' get automatically added a control widget.
-       */
-      ['seed', 'noise_seed'].includes(inputSpec.name)
-
-    if (controlAfterGenerate) {
-      const seedControl = addValueControlWidget(
-        node,
-        widget,
-        'randomize',
-        undefined,
-        undefined,
-        transformInputSpecV2ToV1(inputSpec)
-      )
-      widget.linkedWidgets = [seedControl]
-    }
+    // Don't auto-add control widgets - they should be explicitly defined
 
     return widget
   }
