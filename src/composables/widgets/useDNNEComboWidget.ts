@@ -83,9 +83,9 @@ const addDNNEComboWidget = (node: LGraphNode, inputSpec: ComboInputSpec) => {
           
           const response = await api.fetchApi(url)
           if (response.ok) {
-            const config = await response.json()
-            // Update nodes with the new configuration
-            updateNodesWithConfig(node, config)
+            const data = await response.json()
+            // Update nodes with the new configuration (use inner config object)
+            updateNodesWithConfig(node, data.config)
           } else {
             const errorText = await response.text()
             console.error(`[DNNE] Failed to fetch config for task ${value}: ${response.status} ${response.statusText}`, errorText)
