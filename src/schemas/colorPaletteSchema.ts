@@ -2,22 +2,57 @@ import { LiteGraph } from '@comfyorg/litegraph'
 import { z } from 'zod'
 
 const nodeSlotSchema = z.object({
-  CLIP: z.string(),
-  CLIP_VISION: z.string(),
-  CLIP_VISION_OUTPUT: z.string(),
-  CONDITIONING: z.string(),
-  CONTROL_NET: z.string(),
-  IMAGE: z.string(),
-  LATENT: z.string(),
-  MASK: z.string(),
+  // Core ML/NN types
+  TENSOR: z.string(),
   MODEL: z.string(),
-  STYLE_MODEL: z.string(),
-  VAE: z.string(),
-  NOISE: z.string(),
-  GUIDER: z.string(),
-  SAMPLER: z.string(),
-  SIGMAS: z.string(),
-  TAESD: z.string()
+  DATASET: z.string(),
+  DATALOADER: z.string(),
+  OPTIMIZER: z.string(),
+  SCHEMA: z.string(),
+  IMAGE: z.string(),
+  
+  // Robotics types
+  ROBOT_STATE: z.string(),
+  SENSOR_DATA: z.string(),
+  ACTION: z.string(),
+  CONTEXT: z.string(),
+  ENV_HANDLE: z.string(),
+  SIM_HANDLE: z.string(),
+  
+  // Control/sync types
+  SYNC: z.string(),
+  TRIGGER: z.string(),
+  BALANCING_CONFIG: z.string(),
+  
+  // RL types
+  ISAAC_ENV_CONFIG: z.string(),
+  PPO_CONFIG: z.string(),
+  PPO_AGENT: z.string(),
+  RL_METRICS: z.string(),
+  
+  // Basic types
+  DICT: z.string(),
+  FLOAT: z.string(),
+  INT: z.string(),
+  STRING: z.string(),
+  BOOLEAN: z.string(),
+  COMBO: z.string(),
+  
+  // Legacy ComfyUI types (kept for compatibility)
+  CLIP: z.string().optional(),
+  CLIP_VISION: z.string().optional(),
+  CLIP_VISION_OUTPUT: z.string().optional(),
+  CONDITIONING: z.string().optional(),
+  CONTROL_NET: z.string().optional(),
+  LATENT: z.string().optional(),
+  MASK: z.string().optional(),
+  STYLE_MODEL: z.string().optional(),
+  VAE: z.string().optional(),
+  NOISE: z.string().optional(),
+  GUIDER: z.string().optional(),
+  SAMPLER: z.string().optional(),
+  SIGMAS: z.string().optional(),
+  TAESD: z.string().optional()
 })
 
 const litegraphBaseSchema = z.object({

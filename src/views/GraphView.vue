@@ -44,6 +44,7 @@ import { StatusWsMessageStatus } from '@/schemas/apiSchema'
 import { api } from '@/scripts/api'
 import { app } from '@/scripts/app'
 import { setupAutoQueueHandler } from '@/services/autoQueueService'
+import { installDNNETypeValidation } from '@/services/dnneTypeValidation'
 import { useKeybindingService } from '@/services/keybindingService'
 import { useCommandStore } from '@/stores/commandStore'
 import { useExecutionStore } from '@/stores/executionStore'
@@ -159,6 +160,9 @@ watchEffect(() => {
 })
 
 const init = () => {
+  // Install DNNE type validation system
+  installDNNETypeValidation()
+  
   const coreCommands = useCoreCommands()
   useCommandStore().registerCommands(coreCommands)
   useMenuItemStore().registerCoreMenuCommands()
