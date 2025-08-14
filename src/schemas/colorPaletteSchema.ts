@@ -10,17 +10,7 @@ const nodeSlotSchema = z.object({
   OPTIMIZER: z.string(),
   SCHEMA: z.string(),
   IMAGE: z.string(),
-  
-  // Robotics types
-  ROBOT_STATE: z.string(),
-  SENSOR_DATA: z.string(),
   ACTION: z.string(),
-  CONTEXT: z.string(),
-  ENV_HANDLE: z.string(),
-  SIM_HANDLE: z.string(),
-  
-  // Control/sync types
-  SYNC: z.string(),
   TRIGGER: z.string(),
   BALANCING_CONFIG: z.string(),
   
@@ -28,7 +18,6 @@ const nodeSlotSchema = z.object({
   ISAAC_ENV_CONFIG: z.string(),
   PPO_CONFIG: z.string(),
   PPO_AGENT: z.string(),
-  RL_METRICS: z.string(),
   
   // Basic types
   DICT: z.string(),

@@ -9,6 +9,7 @@ import {
   type Palette,
   paletteSchema
 } from '@/schemas/colorPaletteSchema'
+import { buildLinkColorMap } from '@/services/dnneLinkColorService'
 import { app } from '@/scripts/app'
 import { downloadBlob, uploadFile } from '@/scripts/utils'
 import { useNodeDefStore } from '@/stores/nodeDefStore'
@@ -73,12 +74,16 @@ export const useColorPaletteService = () => {
     const types = Object.fromEntries(
       Array.from(nodeDefStore.nodeDataTypes).map((type) => [type, ''])
     )
+    
+    // Build enhanced color map with wildcard support
+    const enhancedColorMap = buildLinkColorMap(linkColorPalette)
+    
     Object.assign(
       app.canvas.default_connection_color_byType,
       types,
-      linkColorPalette
+      enhancedColorMap
     )
-    Object.assign(LGraphCanvas.link_type_colors, types, linkColorPalette)
+    Object.assign(LGraphCanvas.link_type_colors, types, enhancedColorMap)
   }
 
   /**

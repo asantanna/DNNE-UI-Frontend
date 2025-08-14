@@ -18,14 +18,18 @@ function checkSingleTypeConnection(type_a: string, type_b: string): boolean {
   
   // DNNE wildcard patterns
   if (type_a.startsWith("*")) {
-    const baseType = type_a.substring(1).toLowerCase();
-    // Check if b matches the base type exactly or ends with it
-    return type_b === baseType || type_b.endsWith(baseType);
+    const baseType = type_a.substring(1);
+    // Check if b matches the base type exactly or ends with it (case-insensitive)
+    const bLower = type_b.toLowerCase();
+    const baseTypeLower = baseType.toLowerCase();
+    return bLower === baseTypeLower || bLower.endsWith(baseTypeLower);
   }
   if (type_b.startsWith("*")) {
-    const baseType = type_b.substring(1).toLowerCase();
-    // Check if a matches the base type exactly or ends with it
-    return type_a === baseType || type_a.endsWith(baseType);
+    const baseType = type_b.substring(1);
+    // Check if a matches the base type exactly or ends with it (case-insensitive)
+    const aLower = type_a.toLowerCase();
+    const baseTypeLower = baseType.toLowerCase();
+    return aLower === baseTypeLower || aLower.endsWith(baseTypeLower);
   }
   
   // Exact match
