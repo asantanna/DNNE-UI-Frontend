@@ -48,25 +48,19 @@ export const ORIGINAL_COLORS = {
 
 export const DNNE_COLORS = {
   // Primary data flow - slightly brighter than others (2/3 brightness)
-  DATA_COLOR: dim(ORIGINAL_COLORS.LIGHT_GREEN, 0.66),  // '#56855B' - Main tensor/data flow color
-  
+  DATA_COLOR: dim(ORIGINAL_COLORS.LIGHT_GREEN, 0.66),
   // Object types (1/2 brightness)
-  OBJ_COLOR: dim(ORIGINAL_COLORS.PURPLE, 0.5),       // '#5A4F6E' - Objects, models, agents
-  
+  OBJ_COLOR: dim(ORIGINAL_COLORS.PURPLE, 0.5),
   // Statistics and dictionaries (1/2 brightness)  
-  STATS_COLOR: dim(ORIGINAL_COLORS.YELLOW, 0.3),       // '#806B00' - Stats, summaries, Python dicts
-  
+  STATS_COLOR: dim(ORIGINAL_COLORS.YELLOW, 0.3),
   // Training and numeric types
-  TRAINING_COLOR: dim(ORIGINAL_COLORS.YELLOW, 0.2), // Dimmed training yellow for loss/accuracy links
-  
+  TRAINING_COLOR: ORIGINAL_COLORS.BLUE,
   // Control flow (1/2 brightness)
-  CONTROL_COLOR: dim(ORIGINAL_COLORS.RED, 0.5),             // '#7F3737' - Triggers and control signals (50% dimmed)
-  
+  CONTROL_COLOR: dim(ORIGINAL_COLORS.RED, 0.4),
   // Schema and metadata (1/2 brightness)
-  SCHEMA_COLOR: dim(ORIGINAL_COLORS.BROWN, 0.5),         // '#463A2B' - Schema definitions, structure metadata
-  
+  SCHEMA_COLOR: dim(ORIGINAL_COLORS.BROWN, 0.5),
   // Configuration - dimmed version of utility node color (BalancingConfig)
-  CONFIG_COLOR: dim(ORIGINAL_COLORS.RED, 0.2), // Dimmed utility blue for config links
+  CONFIG_COLOR: dim(ORIGINAL_COLORS.PURPLE, 0.5),
   
   // Special types
   GRAY: '#808080',         // ANY type and pure wildcards

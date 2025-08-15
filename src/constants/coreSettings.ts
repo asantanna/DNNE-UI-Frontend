@@ -543,7 +543,7 @@ export const CORE_SETTINGS: SettingParams[] = [
     tooltip:
       'When deleting a node, attempt to reconnect all of its input and output links (bypassing the deleted node)',
     type: 'boolean',
-    defaultValue: true,
+    defaultValue: false,
     versionAdded: '1.3.40'
   },
   {
