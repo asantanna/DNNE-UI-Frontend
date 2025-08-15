@@ -1,9 +1,9 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-import { useModelLibrarySidebarTab } from '@/composables/sidebarTabs/useModelLibrarySidebarTab'
+// import { useModelLibrarySidebarTab } from '@/composables/sidebarTabs/useModelLibrarySidebarTab'  // Not used in DNNE
 import { useNodeLibrarySidebarTab } from '@/composables/sidebarTabs/useNodeLibrarySidebarTab'
-import { useQueueSidebarTab } from '@/composables/sidebarTabs/useQueueSidebarTab'
+// import { useQueueSidebarTab } from '@/composables/sidebarTabs/useQueueSidebarTab'  // Not used in DNNE
 import { useWorkflowsSidebarTab } from '@/composables/sidebarTabs/useWorkflowsSidebarTab'
 import { useCommandStore } from '@/stores/commandStore'
 import { SidebarTabExtension } from '@/types/extensionTypes'
@@ -55,9 +55,11 @@ export const useSidebarTabStore = defineStore('sidebarTab', () => {
    * Register the core sidebar tabs.
    */
   const registerCoreSidebarTabs = () => {
-    registerSidebarTab(useQueueSidebarTab())
+    // Queue tab removed - not used in DNNE
+    // registerSidebarTab(useQueueSidebarTab())
     registerSidebarTab(useNodeLibrarySidebarTab())
-    registerSidebarTab(useModelLibrarySidebarTab())
+    // Model Library tab removed - not used in DNNE
+    // registerSidebarTab(useModelLibrarySidebarTab())
     registerSidebarTab(useWorkflowsSidebarTab())
   }
 
