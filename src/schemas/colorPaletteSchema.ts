@@ -1,48 +1,9 @@
 import { LiteGraph } from '@comfyorg/litegraph'
 import { z } from 'zod'
 
-const nodeSlotSchema = z.object({
-  // Core ML/NN types
-  TENSOR: z.string(),
-  MODEL: z.string(),
-  DATASET: z.string(),
-  DATALOADER: z.string(),
-  OPTIMIZER: z.string(),
-  SCHEMA: z.string(),
-  IMAGE: z.string(),
-  ACTION: z.string(),
-  TRIGGER: z.string(),
-  BALANCING_CONFIG: z.string(),
-  
-  // RL types
-  ISAAC_ENV_CONFIG: z.string(),
-  PPO_CONFIG: z.string(),
-  PPO_AGENT: z.string(),
-  
-  // Basic types
-  DICT: z.string(),
-  FLOAT: z.string(),
-  INT: z.string(),
-  STRING: z.string(),
-  BOOLEAN: z.string(),
-  COMBO: z.string(),
-  
-  // Legacy ComfyUI types (kept for compatibility)
-  CLIP: z.string().optional(),
-  CLIP_VISION: z.string().optional(),
-  CLIP_VISION_OUTPUT: z.string().optional(),
-  CONDITIONING: z.string().optional(),
-  CONTROL_NET: z.string().optional(),
-  LATENT: z.string().optional(),
-  MASK: z.string().optional(),
-  STYLE_MODEL: z.string().optional(),
-  VAE: z.string().optional(),
-  NOISE: z.string().optional(),
-  GUIDER: z.string().optional(),
-  SAMPLER: z.string().optional(),
-  SIGMAS: z.string().optional(),
-  TAESD: z.string().optional()
-})
+// Allow any string keys with string values for flexibility with DNNE types
+// This includes all the specific type suffixes we use (_OBJ, _PYDICT, _TENSOR, etc.)
+const nodeSlotSchema = z.record(z.string(), z.string())
 
 const litegraphBaseSchema = z.object({
   BACKGROUND_IMAGE: z.string(),
@@ -108,7 +69,7 @@ const colorsSchema = z.object({
 })
 
 const partialColorsSchema = z.object({
-  node_slot: nodeSlotSchema.partial(),
+  node_slot: nodeSlotSchema,  // Already flexible as z.record
   litegraph_base: litegraphBaseSchema.partial(),
   comfy_base: comfyBaseSchema.partial()
 })

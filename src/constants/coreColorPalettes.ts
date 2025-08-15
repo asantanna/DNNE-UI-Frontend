@@ -1,8 +1,12 @@
-import dark from '@/assets/palettes/dark.json'
+import darkTemplate from '@/assets/palettes/dark.json'
+import { substitutePaletteColors } from '@/constants/dnneColors'
 import type {
   ColorPalettes,
   CompletedPalette
 } from '@/schemas/colorPaletteSchema'
+
+// Apply color substitutions to the dark palette template
+const dark = substitutePaletteColors(darkTemplate) as CompletedPalette
 
 export const CORE_COLOR_PALETTES: ColorPalettes = {
   dark

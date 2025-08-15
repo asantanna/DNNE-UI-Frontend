@@ -6,42 +6,7 @@
  */
 
 import { LGraphCanvas, LGraphNode } from '@comfyorg/litegraph'
-
-// Suffix-based color mappings for when both types are wildcards
-const SUFFIX_COLORS: Record<string, string> = {
-  // Data flow types
-  'TENSOR': '#B39DDB',      // Purple - main data flow
-  
-  // Configuration types
-  'CONFIG': '#6EE7B7',       // Green - configuration
-  
-  // Control flow types
-  'TRIGGER': '#FF6E6E',      // Red - control signals
-  
-  // Statistics/data structures
-  'STATS': '#FFD500',        // Yellow - metrics
-  'SUMMARY': '#FFD500',      // Yellow - aggregated data
-  'DICT': '#FFD500',         // Yellow - dictionary structures
-  
-  // Schema/structure definitions
-  'SCHEMA': '#8B7355',       // Brown - structure definitions
-  'METADATA': '#8B7355',     // Brown - metadata
-  
-  // Object types
-  'OBJ': '#81C784',          // Light Blue - objects
-  'MODEL': '#81C784',        // Light Blue - neural network models
-  
-  // Data source types
-  'DATASET': '#FFA931',      // Orange - data sources
-  'DATALOADER': '#FFA931',   // Orange - data loading
-  
-  // Training/numeric types
-  'OPTIMIZER': '#64B5F6',    // Cyan - training components
-  'FLOAT': '#64B5F6',        // Cyan - numeric values
-}
-
-// Default color for pure wildcards or unknown types
-const DEFAULT_WILDCARD_COLOR = '#808080'  // Gray
+import { SUFFIX_COLOR_MAP, DNNE_COLORS } from '@/constants/dnneColors'
 
 /**
  * Extracts the suffix from a type string (last element after final underscore)
@@ -74,27 +39,29 @@ export function resolveSpecificLinkType(
   outputType: string | null | undefined,
   inputType: string | null | undefined
 ): string {
+
   // Handle null/undefined - shouldn't happen after validation
   if (!outputType && !inputType) {
     console.error('resolveSpecificLinkType: Both types are null/undefined, this should not happen after validation')
     return 'ANY'
   }
+  
   if (!outputType) return inputType as string  // We know inputType is non-null here
   if (!inputType) return outputType
   
   // Rule 1: Output type is specific (doesn't start with *)
-  if (outputType[0] !== '*') {
+  if (!isWildcard(outputType[0])) {
     return outputType
   }
   
   // Rule 2: Input type is specific (doesn't start with *)
-  if (inputType[0] !== '*') {
+  if (!isWildcard(inputType[0])) {
     return inputType
   }
   
   // Rule 3: Both are wildcards
   // Special case: pure wildcards
-  if (outputType === '*' && inputType === '*') {
+  if (isWildcard(outputType) && isWildcard(inputType)) {
     return 'ANY'
   }
   
@@ -102,7 +69,7 @@ export function resolveSpecificLinkType(
   const withoutStar = inputType.substring(1)
   
   // If it's directly a suffix like *TENSOR
-  if (SUFFIX_COLORS[withoutStar]) {
+  if (SUFFIX_COLOR_MAP[withoutStar as keyof typeof SUFFIX_COLOR_MAP]) {
     return withoutStar
   }
   
@@ -121,7 +88,7 @@ export function resolveSpecificLinkType(
  * Gets suffix colors for palette initialization
  */
 export function getSuffixColors(): Record<string, string> {
-  return { ...SUFFIX_COLORS }
+  return { ...SUFFIX_COLOR_MAP }
 }
 
 /**
@@ -136,13 +103,39 @@ export function buildLinkColorMap(specificColors: Record<string, string>): Recor
   
   // Add wildcard patterns based on suffix colors
   // These will be used when links have wildcard types
-  for (const [suffix, color] of Object.entries(SUFFIX_COLORS)) {
+  for (const [suffix, color] of Object.entries(SUFFIX_COLOR_MAP)) {
     colorMap[`*${suffix}`] = color
     colorMap[`*_${suffix}`] = color
   }
   
-  // Add pure wildcard
-  colorMap['*'] = DEFAULT_WILDCARD_COLOR
+  // Add wildcard versions for all specific types in the palette
+  // This ensures unconnected slots with wildcards show the correct color
+  for (const [type, color] of Object.entries(specificColors)) {
+    colorMap[`*${type}`] = color
+    // Also handle types that might appear with underscores
+    if (type.includes('_')) {
+      const parts = type.split('_')
+      // Add pattern for last part (e.g., SCHEMA_PYDICT -> *_PYDICT)
+      const lastPart = parts[parts.length - 1]
+      if (!colorMap[`*_${lastPart}`]) {
+        colorMap[`*_${lastPart}`] = color
+      }
+      // Add pattern for last two parts if compound (e.g., SCHEMA_PYDICT -> *_SCHEMA_PYDICT)
+      if (parts.length >= 2) {
+        const lastTwo = parts.slice(-2).join('_')
+        colorMap[`*${lastTwo}`] = color
+        colorMap[`*_${lastTwo}`] = color
+      }
+    }
+  }
+  
+  // Add pure wildcard and ANY type
+  colorMap['*'] = DNNE_COLORS.GRAY  // Gray for pure wildcards
+  colorMap['ANY'] = DNNE_COLORS.GRAY  // Gray for ANY type
+  
+  // Set a fallback for unmatched types
+  // Note: LiteGraph may not use this directly, but it documents our intent
+  colorMap[''] = DNNE_COLORS.BLACK  // Black for failed matches/unknown types
   
   return colorMap
 }
