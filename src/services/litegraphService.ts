@@ -4,7 +4,6 @@ import {
   LGraphEventMode,
   LGraphNode,
   LiteGraph,
-  RenderShape,
   type Vector2,
   createBounds
 } from '@comfyorg/litegraph'
@@ -138,7 +137,7 @@ export const useLitegraphService = () => {
         if (widgetConstructor && !inputSpec.forceInput) return
 
         this.addInput(inputName, inputSpec.type, {
-          shape: inputSpec.isOptional ? RenderShape.HollowCircle : undefined,
+          shape: undefined, // Use default shape for all inputs (same as outputs)
           localized_name: st(nameKey, inputName)
         })
       }
@@ -180,7 +179,7 @@ export const useLitegraphService = () => {
         if (!widget?.options?.socketless) {
           const inputSpecV1 = transformInputSpecV2ToV1(widgetInputSpec)
           this.addInput(inputName, inputSpec.type, {
-            shape: inputSpec.isOptional ? RenderShape.HollowCircle : undefined,
+            shape: undefined, // Use default shape for all inputs (same as outputs)
             localized_name: st(nameKey, inputName),
             widget: { name: inputName, [GET_CONFIG]: () => inputSpecV1 }
           })
