@@ -42,7 +42,7 @@ export const ORIGINAL_COLORS = {
   LIGHT_GREEN: '#81C784',   // Original bright light green
   GREEN: '#6EE9BD',         // Original bright config green (unused now)
   CYAN: '#64B5F6',          // Original bright cyan (unused now)
-  BLUE: '#556677',          // Utility node color (BalancingConfig bgcolor)
+  BLUE: '#556677',          // Utility node color (BalancerConfig bgcolor)
   PURPLE: '#B39DDB',        // Original bright purple
 } as const
 
@@ -59,7 +59,7 @@ export const DNNE_COLORS = {
   CONTROL_COLOR: dim(ORIGINAL_COLORS.RED, 0.4),
   // Schema and metadata (1/2 brightness)
   SCHEMA_COLOR: dim(ORIGINAL_COLORS.BROWN, 0.5),
-  // Configuration - dimmed version of utility node color (BalancingConfig)
+  // Configuration - dimmed version of utility node color (BalancerConfig)
   CONFIG_COLOR: dim(ORIGINAL_COLORS.PURPLE, 0.5),
   
   // Special types
