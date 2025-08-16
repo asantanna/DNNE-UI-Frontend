@@ -59,36 +59,71 @@ const addDNNEComboWidget = (node: LGraphNode, inputSpec: ComboInputSpec) => {
     inputSpec.name,
     defaultValue,
     async (value) => {
-      // Check if this is a task selection widget that needs to update other nodes
-      if (inputSpec.name === 'task' && value !== 'none') {
+      // Check if this is an IsaacGymEnvs widget that needs special handling
+      if (node.type === 'IsaacGymEnvs' && (inputSpec.name === 'task' || inputSpec.name.startsWith('dynamic_'))) {
         try {
+          // Get task value (either from this widget if it's task, or find the task widget)
+          let taskValue = value
+          if (inputSpec.name !== 'task') {
+            const taskWidget = node.widgets?.find(w => w.name === 'task')
+            taskValue = taskWidget?.value || 'none'
+          }
+          
+          if (taskValue === 'none') {
+            return
+          }
+          
+          // Collect all widget values to send to backend
+          const widgetValues: Record<string, any> = {}
+          if (node.widgets) {
+            for (const w of node.widgets) {
+              widgetValues[w.name] = w.value
+            }
+          }
+          
           // Determine which node types are in the graph to optimize the API call
           const nodeTypes = new Set<string>()
           const graph = app.graph
           if (graph) {
-            for (const node of graph._nodes) {
-              if (['PPOAgent', 'PPOConfig', 'IsaacGymSim'].includes(node.type)) {
-                nodeTypes.add(node.type)
+            for (const graphNode of graph._nodes) {
+              if (['PPOAgent', 'PPOConfig', 'IsaacGymSim'].includes(graphNode.type)) {
+                nodeTypes.add(graphNode.type)
               }
             }
           }
           
-          // Call the API with the specific node types present
-          let url = `/dnne/env_config/${value}`
+          // Call the API with widget that triggered the change and all current values
+          let url = `/dnne/env_config/${taskValue}`
+          const params = new URLSearchParams()
           if (nodeTypes.size === 1) {
-            // If only one type of node is present, pass it as a query param
-            const nodeType = Array.from(nodeTypes)[0]
-            url += `?node_type=${nodeType}`
+            params.append('node_type', Array.from(nodeTypes)[0])
+          }
+          params.append('trigger_widget', inputSpec.name)
+          params.append('widget_values', JSON.stringify(widgetValues))
+          
+          if (params.toString()) {
+            url += `?${params.toString()}`
           }
           
           const response = await api.fetchApi(url)
           if (response.ok) {
             const data = await response.json()
+            
             // Update nodes with the new configuration (use inner config object)
             updateNodesWithConfig(node, data.config)
+            
+            // Update dynamic widgets if provided
+            if (data.widget_updates) {
+              updateDynamicWidgets(node, data.widget_updates)
+            }
+            
+            // Update schema display if provided
+            if (data.schema_display) {
+              updateSchemaDisplayWidget(node, data.schema_display)
+            }
           } else {
             const errorText = await response.text()
-            console.error(`[DNNE] Failed to fetch config for task ${value}: ${response.status} ${response.statusText}`, errorText)
+            console.error(`[DNNE] Failed to fetch config for task ${taskValue}: ${response.status} ${response.statusText}`, errorText)
           }
         } catch (error) {
           console.error('[DNNE] Error fetching environment config:', error)
@@ -253,6 +288,74 @@ function updateNodeWidgets(node: LGraphNode, widgetValues: Record<string, any>) 
     if (node.onWidgetChanged) {
       node.onWidgetChanged.call(node, widget.name, newValue, oldValue, widget)
     }
+  }
+}
+
+// Helper function to update dynamic widgets based on backend response
+function updateDynamicWidgets(node: LGraphNode, updates: Record<string, any>) {
+  if (!node.widgets) {
+    return
+  }
+  
+  // Apply updates to widgets
+  for (const widget of node.widgets) {
+    if (updates[widget.name]) {
+      const update = updates[widget.name]
+      
+      // Update visibility
+      if ('hidden' in update) {
+        widget.hidden = update.hidden
+        // Also update the widget's DOM element if it exists (DOM widgets have element property)
+        const domWidget = widget as any
+        if (domWidget.element) {
+          domWidget.element.style.display = update.hidden ? 'none' : ''
+        }
+      }
+      
+      // Update label (store it in widget for later reference)
+      if ('label' in update) {
+        widget.label = update.label
+        const domWidget = widget as any
+        if (domWidget.element) {
+          const labelElement = domWidget.element.querySelector('label')
+          if (labelElement) {
+            labelElement.textContent = update.label
+          }
+        }
+      }
+      
+      // Update choices for combo widgets
+      if ('choices' in update && widget.options) {
+        widget.options.values = update.choices
+        // Update the value to the default if current value is not in new choices
+        if ('default' in update && (!widget.value || !update.choices.includes(widget.value))) {
+          widget.value = update.default
+        }
+      }
+      
+      // Update tooltip
+      if ('tooltip' in update) {
+        const domWidget = widget as any
+        if (domWidget.element) {
+          domWidget.element.title = update.tooltip
+        }
+      }
+    }
+  }
+}
+
+// Helper function to update schema display widget
+function updateSchemaDisplayWidget(node: LGraphNode, displayText: string) {
+  if (!node.widgets) {
+    return
+  }
+  
+  // Find and update the schema_display widget
+  const schemaWidget = node.widgets.find(w => w.name === 'schema_display')
+  if (schemaWidget) {
+    schemaWidget.value = displayText
+    // Trigger a redraw
+    app.graph.setDirtyCanvas(true, true)
   }
 }
 
