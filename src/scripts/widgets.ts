@@ -6,7 +6,8 @@ import type {
 } from '@comfyorg/litegraph/dist/types/widgets'
 
 import { useBooleanWidget } from '@/composables/widgets/useBooleanWidget'
-import { useDNNEComboWidget } from '@/composables/widgets/useDNNEComboWidget'
+import { useComboWidget } from '@/composables/widgets/useComboWidget'
+import { useDnneComboWidget } from '@/composables/widgets/useDnneComboWidget'
 import { useFloatWidget } from '@/composables/widgets/useFloatWidget'
 import { useImageUploadWidget } from '@/composables/widgets/useImageUploadWidget'
 import { useIntWidget } from '@/composables/widgets/useIntWidget'
@@ -288,6 +289,7 @@ export const ComfyWidgets: Record<string, ComfyWidgetConstructor> = {
   BOOLEAN: transformWidgetConstructorV2ToV1(useBooleanWidget()),
   STRING: transformWidgetConstructorV2ToV1(useStringWidget()),
   MARKDOWN: transformWidgetConstructorV2ToV1(useMarkdownWidget()),
-  COMBO: transformWidgetConstructorV2ToV1(useDNNEComboWidget()),
+  COMBO: transformWidgetConstructorV2ToV1(useComboWidget()),
+  DNNE_COMBO: transformWidgetConstructorV2ToV1(useDnneComboWidget()),
   IMAGEUPLOAD: useImageUploadWidget()
 }

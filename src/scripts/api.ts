@@ -123,6 +123,7 @@ interface BackendApiCalls {
   workflow_exists_response: WorkflowExistsResponseWsMessage
   client_status: ClientStatusWsMessage
   runner_args: any // Runner args configuration from server
+  widget_callback_response: any // Widget callback responses from server
 }
 
 /** Dictionary of all api calls */
@@ -490,6 +491,8 @@ export class ComfyApi extends EventTarget {
             case 'telemetry_history':
             case 'client_status':
             case 'runner_args':
+            case 'widget_callback_response':
+              // console.log('[API] widget_callback_response msg:', msg)
               this.dispatchCustomEvent(msg.type, msg.data)
               break
             default:
