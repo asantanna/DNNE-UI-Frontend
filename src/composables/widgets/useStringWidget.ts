@@ -11,13 +11,18 @@ import { useSettingStore } from '@/stores/settingStore'
 function addMultilineWidget(
   node: LGraphNode,
   name: string,
-  opts: { defaultVal: string; placeholder?: string }
+  opts: { defaultVal: string; placeholder?: string; widgetHeight?: number }
 ) {
   const inputEl = document.createElement('textarea')
   inputEl.className = 'comfy-multiline-input'
   inputEl.value = opts.defaultVal
   inputEl.placeholder = opts.placeholder || name
   inputEl.spellcheck = useSettingStore().get('Comfy.TextareaWidget.Spellcheck')
+  
+  // Set custom widget height if specified
+  if (opts.widgetHeight) {
+    inputEl.style.setProperty('--comfy-widget-min-height', opts.widgetHeight.toString())
+  }
 
   const widget = node.addDOMWidget(name, 'customtext', inputEl, {
     getValue(): string {
@@ -106,7 +111,8 @@ export const useStringWidget = () => {
     const widget = multiline
       ? addMultilineWidget(node, inputSpec.name, {
           defaultVal,
-          placeholder: inputSpec.placeholder
+          placeholder: inputSpec.placeholder,
+          widgetHeight: inputSpec.widgetHeight
         })
       : node.addWidget('text', inputSpec.name, defaultVal, () => {}, {})
 

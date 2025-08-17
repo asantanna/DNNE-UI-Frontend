@@ -66,7 +66,8 @@ export const zStringInputOptions = zBaseInputOptions.extend({
 
   // Multiline-only fields
   defaultVal: z.string().optional(),
-  placeholder: z.string().optional()
+  placeholder: z.string().optional(),
+  widgetHeight: z.number().optional()
 })
 
 export const zComboInputOptions = zBaseInputOptions.extend({
