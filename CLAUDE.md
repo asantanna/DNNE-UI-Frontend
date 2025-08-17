@@ -8,6 +8,17 @@ This is the frontend interface for DNNE, a visual programming environment for bu
 
 **For complete project documentation, development commands, and system architecture, see the main CLAUDE.md in the DNNE-UI backend repository.**
 
+## Development Timeline
+
+- **June 25, 2025**: Started DNNE modifications to the ComfyUI frontend
+  - First DNNE feature: Queue export button
+- **July 25, 2025**: Added DNNE combo widget system
+  - Custom widget for handling dynamic node configurations
+- **August 2025**: Major UI enhancements
+  - Agent UI integration
+  - Log viewer implementation
+  - Type system updates with wildcard matching
+
 ## Frontend-Specific Information
 
 ### Technology Stack
