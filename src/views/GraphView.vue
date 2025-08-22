@@ -46,6 +46,7 @@ import { app } from '@/scripts/app'
 import { setupAutoQueueHandler } from '@/services/autoQueueService'
 import { installDNNETypeValidation } from '@/services/dnneTypeValidation'
 import { installDNNELinkColors } from '@/services/dnneLinkColorService'
+import { initializeMultiConnectionSupport } from '@/services/dnneMultiConnection'
 import { useKeybindingService } from '@/services/keybindingService'
 import { useCommandStore } from '@/stores/commandStore'
 import { useExecutionStore } from '@/stores/executionStore'
@@ -166,6 +167,9 @@ const init = () => {
   
   // Install DNNE link color resolution
   installDNNELinkColors()
+  
+  // Initialize multi-connection support
+  initializeMultiConnectionSupport()
   
   const coreCommands = useCoreCommands()
   useCommandStore().registerCommands(coreCommands)

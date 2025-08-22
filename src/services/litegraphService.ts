@@ -136,10 +136,14 @@ export const useLitegraphService = () => {
         )
         if (widgetConstructor && !inputSpec.forceInput) return
 
-        this.addInput(inputName, inputSpec.type, {
+        const inputOptions = {
           shape: undefined, // Use default shape for all inputs (same as outputs)
-          localized_name: st(nameKey, inputName)
-        })
+          localized_name: st(nameKey, inputName),
+          // Pass through single_conn_only flag if present
+          single_conn_only: (inputSpec as any).single_conn_only
+        }
+
+        this.addInput(inputName, inputSpec.type, inputOptions)
       }
 
       /**
@@ -181,7 +185,9 @@ export const useLitegraphService = () => {
           this.addInput(inputName, inputSpec.type, {
             shape: undefined, // Use default shape for all inputs (same as outputs)
             localized_name: st(nameKey, inputName),
-            widget: { name: inputName, [GET_CONFIG]: () => inputSpecV1 }
+            widget: { name: inputName, [GET_CONFIG]: () => inputSpecV1 },
+            // Pass through single_conn_only flag if present
+            single_conn_only: (inputSpec as any).single_conn_only
           })
         }
 

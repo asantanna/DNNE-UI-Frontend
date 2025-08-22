@@ -190,4 +190,14 @@ declare module '@comfyorg/litegraph' {
   interface LGraphNode {
     widgets_values?: unknown[]
   }
+  
+  /**
+   * DNNE extension: Support multiple connections per input
+   * Override the link property to be an array of LinkIds
+   */
+  interface INodeInputSlot {
+    links?: LinkId[]  // Array of connections instead of single link
+    link?: LinkId | null  // Keep for backward compatibility during transition
+    single_conn_only?: boolean  // Flag from node definition to restrict to single connection
+  }
 }
