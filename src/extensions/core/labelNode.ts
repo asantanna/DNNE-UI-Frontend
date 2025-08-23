@@ -18,12 +18,8 @@ interface LabelNode extends LGraphNode {
   labelDirection?: 'input' | 'output'
 }
 
-// Extend app type to include labelDictionary
-declare module '../../scripts/app' {
-  interface ComfyApp {
-    labelDictionary: Record<string, LabelMetadata>
-  }
-}
+// Label dictionary is now stored per-workflow in app.graph.extra.labelDictionary
+// This prevents collisions between multiple open workflows
 
 class LabelNode extends LGraphNode {
   static override category: string | undefined
@@ -260,9 +256,11 @@ class LabelNode extends LGraphNode {
   }
   
   removeLabelFromDictionary(): void {
-    if (!this.dictionaryKey || !app.labelDictionary) return
+    if (!this.dictionaryKey) return
+    const labelDict = (app.graph?.extra as any)?.labelDictionary as Record<string, LabelMetadata> | undefined
+    if (!labelDict) return
     console.log('[LabelNode] Removing from dictionary:', this.dictionaryKey, 'direction:', this.labelDirection)
-    delete app.labelDictionary[this.dictionaryKey]
+    delete labelDict[this.dictionaryKey]
   }
   
   override onRemoved(): void {
@@ -277,9 +275,10 @@ app.registerExtension({
   async setup() {
     console.log('[LabelNode] Extension setup starting... VERSION 3.1 - FIXED')
     
-    // Initialize label dictionary if not exists
-    if (!app.labelDictionary) {
-      app.labelDictionary = {}
+    // Initialize label dictionary in graph.extra if not exists
+    if (!app.graph.extra) app.graph.extra = {} as any
+    if (!(app.graph.extra as any).labelDictionary) {
+      (app.graph.extra as any).labelDictionary = {} as Record<string, LabelMetadata>
     }
     
     // Hook into graph changes to detect link removal
@@ -294,9 +293,10 @@ app.registerExtension({
           // Remove the label node when its link is removed
           console.log('[LabelNode] Removing label node', targetNode.id, 'because its link was deleted')
           // Clean up dictionary entry using dictionaryKey
-          if (targetNode.dictionaryKey && app.labelDictionary[targetNode.dictionaryKey]) {
+          const labelDict = (app.graph.extra as any)?.labelDictionary as Record<string, LabelMetadata> | undefined
+          if (targetNode.dictionaryKey && labelDict?.[targetNode.dictionaryKey]) {
             console.log('[LabelNode] Removing from dictionary:', targetNode.dictionaryKey)
-            delete app.labelDictionary[targetNode.dictionaryKey]
+            delete labelDict[targetNode.dictionaryKey]
           }
           app.graph.remove(targetNode)
           return // The link will be removed as part of removing the node
@@ -322,9 +322,10 @@ app.registerExtension({
                   // Also remove the label when source node is deleted
                   console.log('[LabelNode] Removing orphaned label', targetNode.id)
                   // Clean up dictionary entry using dictionaryKey
-                  if (targetNode.dictionaryKey && app.labelDictionary[targetNode.dictionaryKey]) {
+                  const labelDict = (app.graph.extra as any)?.labelDictionary as Record<string, LabelMetadata> | undefined
+                  if (targetNode.dictionaryKey && labelDict?.[targetNode.dictionaryKey]) {
                     console.log('[LabelNode] Removing from dictionary:', targetNode.dictionaryKey)
-                    delete app.labelDictionary[targetNode.dictionaryKey]
+                    delete labelDict[targetNode.dictionaryKey]
                   }
                   originalRemoveNode.call(this, targetNode)
                 }
@@ -347,8 +348,16 @@ app.registerExtension({
       const nodeType = node.constructor.type || node.type || 'node'
       const labelName = `${nodeType}(${node.id}).${slot.name}`
       
+      // Initialize label dictionary in graph.extra if needed
+      if (!app.graph.extra) app.graph.extra = {} as any
+      if (!(app.graph.extra as any).labelDictionary) {
+        (app.graph.extra as any).labelDictionary = {} as Record<string, LabelMetadata>
+      }
+      
+      const labelDict = (app.graph.extra as any).labelDictionary as Record<string, LabelMetadata>
+      
       // Check for duplicates
-      if (app.labelDictionary[labelName]) {
+      if (labelDict[labelName]) {
         const toastStore = useToastStore()
         toastStore.add({
           severity: 'error',
@@ -383,7 +392,7 @@ app.registerExtension({
       node.connect(slotIndex, labelNode, 0)
       
       // Store in dictionary
-      app.labelDictionary[labelName] = {
+      labelDict[labelName] = {
         nodeId: Number(node.id),
         slotName: slot.name,
         slotType: String(slot.type || '*'),
@@ -402,7 +411,8 @@ app.registerExtension({
       
       const compatibleLabels: Array<{name: string, metadata: LabelMetadata}> = []
       
-      for (const [labelName, metadata] of Object.entries(app.labelDictionary)) {
+      const labelDict = ((app.graph.extra as any)?.labelDictionary || {}) as Record<string, LabelMetadata>
+      for (const [labelName, metadata] of Object.entries(labelDict)) {
         const typedMetadata = metadata as LabelMetadata
         // Only show output labels (we connect inputs to output labels)
         if (typedMetadata.direction !== 'output') continue
@@ -470,7 +480,14 @@ app.registerExtension({
       // Add input label to dictionary for export system
       const inputSlot = node.inputs[slotIndex]
       if (inputSlot) {
-        app.labelDictionary[dictionaryKey] = {
+        // Initialize label dictionary in graph.extra if needed
+        if (!app.graph.extra) app.graph.extra = {} as any
+        if (!(app.graph.extra as any).labelDictionary) {
+          (app.graph.extra as any).labelDictionary = {} as Record<string, LabelMetadata>
+        }
+        
+        const labelDict = (app.graph.extra as any).labelDictionary as Record<string, LabelMetadata>
+        labelDict[dictionaryKey] = {
           nodeId: Number(node.id),
           slotName: inputSlot.name || `input_${slotIndex}`,
           slotType: String(inputSlot.type || '*'),
@@ -738,7 +755,7 @@ app.registerExtension({
                   })
                 } else {
                   // Show why no labels were found for debugging
-                  console.log('[LabelNode-Hook] No compatible labels. Current labels:', app.labelDictionary)
+                  console.log('[LabelNode-Hook] No compatible labels. Current labels:', (app.graph.extra as any)?.labelDictionary)
                 }
               }
             } else {
@@ -815,33 +832,10 @@ app.registerExtension({
     )
     
     LabelNode.category = 'utils'
-  },
-  
-  async beforeRegisterNodeDef(nodeType: any, _nodeData: any, _app: any) {
-    // Store and restore label dictionary in workflow metadata
-    const onSerialize = nodeType.prototype.onSerialize
-    nodeType.prototype.onSerialize = function(o: any) {
-      if (onSerialize) {
-        onSerialize.apply(this, arguments)
-      }
-      
-      // Store label dictionary in workflow metadata
-      if (app.labelDictionary && Object.keys(app.labelDictionary).length > 0) {
-        if (!o.extra) o.extra = {}
-        o.extra.labelDictionary = app.labelDictionary
-      }
-    }
-  },
-  
-  async loadedGraphNode(node: any) {
-    // Restore label dictionary from workflow metadata
-    if (node.extra?.labelDictionary) {
-      if (!app.labelDictionary) {
-        app.labelDictionary = {}
-      }
-      Object.assign(app.labelDictionary, node.extra.labelDictionary)
-    }
   }
+  
+  // Serialization hooks removed - label dictionary is now automatically
+  // serialized/deserialized as part of app.graph.extra
 })
 
 // Export for TypeScript
