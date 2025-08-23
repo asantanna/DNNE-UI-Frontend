@@ -417,7 +417,7 @@ app.registerExtension({
     }
     
     // Function to connect an input to a label
-    function connectToLabel(node: LGraphNode, slotIndex: number, label: {name: string, metadata: LabelMetadata}): void {
+    function connectToLabel(node: LGraphNode, slotIndex: number, label: {name: string, metadata: LabelMetadata}, event?: MouseEvent): void {
       // Create a label node for the INPUT side
       // This label has OUTPUT only (no input) to connect to the node's input
       const inputLabelNode = LiteGraph.createNode('Label') as LabelNode
@@ -431,20 +431,34 @@ app.registerExtension({
       inputLabelNode.removeInput(0) // Remove the default input
       inputLabelNode.addOutput("", "*") // Add an output instead
       
-      // Position the label to the left of the input
-      inputLabelNode.pos = [
-        node.pos[0] - 150,
-        node.pos[1] + (slotIndex * 20)
-      ]
+      // Calculate the label size first so we know its width
+      inputLabelNode.setSize(inputLabelNode.computeSize())
+      
+      // Position it where the mouse was released (like output labels do)
+      const canvas = app.canvas as any
+      const pos = event ? canvas.convertEventToCanvasOffset(event) : null
+      
+      if (pos) {
+        // Use mouse position but shift left by label width
+        const labelWidth = inputLabelNode.size[0]
+        inputLabelNode.pos = [
+          pos[0] - labelWidth,
+          pos[1]
+        ]
+      } else {
+        // Fallback positioning
+        const labelWidth = inputLabelNode.size[0]
+        inputLabelNode.pos = [
+          node.pos[0] - 150 - labelWidth,
+          node.pos[1] + (slotIndex * 20)
+        ]
+      }
       
       app.graph.add(inputLabelNode)
       
       // Connect the label's OUTPUT to the node's INPUT
       // This is the only connection - NO connection between actual nodes!
       inputLabelNode.connect(0, node, slotIndex)
-      
-      // Update node size to fit label
-      inputLabelNode.setSize(inputLabelNode.computeSize())
       
       console.log('[LabelNode] Created input-side label:', {
         labelName: label.name,
@@ -691,7 +705,7 @@ app.registerExtension({
                   const submenuItems = compatibleLabels.map(label => ({
                     content: label.name,
                     callback: () => {
-                      connectToLabel(node, slot, label)
+                      connectToLabel(node, slot, label, options?.event)
                     }
                   }))
                   
