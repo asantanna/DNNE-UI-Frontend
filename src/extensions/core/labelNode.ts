@@ -36,13 +36,91 @@ class LabelNode extends LGraphNode {
       this.properties = {}
     }
     
-    // Labels act like reroute nodes - they have one input and one output
-    // to pass connections through while displaying the label
+    // Labels only have an input to receive the connection
+    // No output - this is just a visual endpoint
     this.addInput("", "*")
-    this.addOutput("", "*")
     
     // This node is purely frontend and does not impact the resulting prompt
     this.isVirtualNode = true
+  }
+  
+  // Override to hide input/output slot circles
+  override drawSlots(_ctx: CanvasRenderingContext2D): void {
+    // Do nothing - this prevents drawing the slot circles
+    // The connections will still work, just won't show the circles
+  }
+  
+  // Prevent disconnecting the input
+  override disconnectInput(_slot: number): boolean {
+    // Don't allow disconnecting - labels should be deleted instead
+    return false
+  }
+  
+  // Override to prevent creating connections from this node
+  override onMouseDown(_e: any, _localPos: any, _graphCanvas: any): boolean {
+    // Don't call super to prevent default connection dragging behavior
+    // This prevents users from dragging new connections from the label
+    return false // Return false to indicate we handled the event
+  }
+  
+  // Prevent this node from being a connection source
+  override getOutputInfo(_slot: number): any {
+    return null // No outputs available
+  }
+  
+  // Override to prevent slot interaction
+  override getSlotInPosition(_x: number, _y: number): any {
+    // Return null to prevent slot selection/interaction
+    // This prevents dragging connections from the input slot
+    return null
+  }
+  
+  // Prevent multiple connections to the input
+  override onConnectInput(
+    inputIndex: number,
+    _outputType: any,
+    _outputSlot: any,
+    _outputNode: any,
+    _outputIndex: number
+  ): boolean {
+    // Check if there's already a connection
+    if (this.inputs[inputIndex].link !== null) {
+      console.log('[LabelNode] Rejecting connection - label already has input')
+      return false // Reject the connection
+    }
+    return true // Allow first connection
+  }
+  
+  // Store original connection info to restore if disconnected
+  originalConnection?: { nodeId: number; slotIndex: number }
+  
+  // Detect and restore disconnections
+  override onConnectionsChange(
+    type: number,
+    slotIndex: number,
+    isConnected: boolean,
+    link: any
+  ): void {
+    if (type === 1 && slotIndex === 0) { // INPUT connection changed
+      if (isConnected && link) {
+        // Store the connection info when connected
+        this.originalConnection = {
+          nodeId: link.origin_id,
+          slotIndex: link.origin_slot
+        }
+        console.log('[LabelNode] Stored connection info:', this.originalConnection)
+      } else if (!isConnected && this.originalConnection) {
+        // Connection was removed, restore it immediately
+        console.log('[LabelNode] Restoring connection to prevent disconnection')
+        const sourceNode = app.graph.getNodeById(this.originalConnection.nodeId)
+        if (sourceNode) {
+          // Restore the connection
+          setTimeout(() => {
+            sourceNode.connect(this.originalConnection!.slotIndex, this, 0)
+          }, 0)
+        }
+      }
+    }
   }
   
   override computeSize(): [number, number] {
@@ -135,11 +213,67 @@ app.registerExtension({
   name: 'Comfy.LabelNode',
   
   async setup() {
-    console.log('[LabelNode] Extension setup starting... VERSION 3.0 - DEBUG MODE')
+    console.log('[LabelNode] Extension setup starting... VERSION 3.1 - FIXED')
     
     // Initialize label dictionary if not exists
     if (!app.labelDictionary) {
       app.labelDictionary = {}
+    }
+    
+    // Hook into graph changes to detect link removal
+    const originalRemoveLink = app.graph.removeLink
+    app.graph.removeLink = function(linkId: number) {
+      // Check if this link is connected to a label node
+      const link = app.graph.links[linkId]
+      if (link) {
+        // Check if target node is a label
+        const targetNode = app.graph.getNodeById(link.target_id) as LabelNode
+        if (targetNode && targetNode.type === 'Label') {
+          // Remove the label node when its link is removed
+          console.log('[LabelNode] Removing label node', targetNode.id, 'because its link was deleted')
+          // Clean up dictionary entry
+          if (targetNode.labelName && app.labelDictionary[targetNode.labelName]) {
+            console.log('[LabelNode] Removing from dictionary:', targetNode.labelName)
+            delete app.labelDictionary[targetNode.labelName]
+          }
+          app.graph.remove(targetNode)
+          return // The link will be removed as part of removing the node
+        }
+      }
+      
+      // Call original removeLink for non-label links
+      return originalRemoveLink.call(this, linkId)
+    }
+    
+    // Hook into node removal to clean up orphaned labels
+    const originalRemoveNode = app.graph.remove
+    app.graph.remove = function(node: LGraphNode) {
+      // Check if this node has any labels connected to it
+      if (node.outputs) {
+        for (const output of node.outputs) {
+          if (output.links) {
+            for (const linkId of output.links) {
+              const link = app.graph.links[linkId]
+              if (link) {
+                const targetNode = app.graph.getNodeById(link.target_id) as LabelNode
+                if (targetNode && targetNode.type === 'Label') {
+                  // Also remove the label when source node is deleted
+                  console.log('[LabelNode] Removing orphaned label', targetNode.id)
+                  // Clean up dictionary entry
+                  if (targetNode.labelName && app.labelDictionary[targetNode.labelName]) {
+                    console.log('[LabelNode] Removing from dictionary:', targetNode.labelName)
+                    delete app.labelDictionary[targetNode.labelName]
+                  }
+                  originalRemoveNode.call(this, targetNode)
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Call original remove
+      return originalRemoveNode.call(this, node)
     }
     
     // Function to create a label from an output
@@ -354,7 +488,65 @@ app.registerExtension({
                 }
               }
               
-              slotIndex = slotInfo.slot_index ?? slotInfo.slotIndex ?? null
+              // Try different possible property names for slot index
+              slotIndex = slotInfo.slot_index ?? slotInfo.slotIndex ?? slotInfo.index ?? null
+              
+              console.log('[LabelNode-Hook] Initial slot index check:', {
+                slotIndex,
+                hasNode: !!node,
+                nodeId: node?.id,
+                isOutput: slotInfo?.constructor?.name === 'NodeOutputSlot',
+                isInput: slotInfo?.constructor?.name === 'NodeInputSlot'
+              })
+              
+              // If still null, try to find it from the node's outputs or inputs
+              if (slotIndex === null && node) {
+                // Check outputs first
+                if (node.outputs) {
+                  for (let i = 0; i < node.outputs.length; i++) {
+                    if (node.outputs[i] === slotInfo) {
+                      slotIndex = i
+                      console.log('[LabelNode-Hook] Found slot index by matching output object:', i)
+                      break
+                    }
+                    // Also check by name as fallback
+                    if (node.outputs[i].name === slotInfo.name) {
+                      slotIndex = i
+                      console.log('[LabelNode-Hook] Found slot index by output name match:', i)
+                      break
+                    }
+                  }
+                }
+                
+                // Check inputs if still not found
+                if (slotIndex === null && node.inputs) {
+                  console.log('[LabelNode-Hook] Checking inputs for slot match:', {
+                    slotInfoName: slotInfo.name,
+                    slotInfoType: slotInfo.type,
+                    nodeInputs: node.inputs.map((inp: any, idx: number) => ({
+                      idx,
+                      name: inp.name,
+                      type: inp.type,
+                      matches: inp === slotInfo,
+                      nameMatches: inp.name === slotInfo.name
+                    }))
+                  })
+                  
+                  for (let i = 0; i < node.inputs.length; i++) {
+                    if (node.inputs[i] === slotInfo) {
+                      slotIndex = i
+                      console.log('[LabelNode-Hook] Found slot index by matching input object:', i)
+                      break
+                    }
+                    // Also check by name as fallback
+                    if (node.inputs[i].name === slotInfo.name) {
+                      slotIndex = i
+                      console.log('[LabelNode-Hook] Found slot index by input name match:', i)
+                      break
+                    }
+                  }
+                }
+              }
             }
             
             const hasConnection = !!node
@@ -385,7 +577,20 @@ app.registerExtension({
             })
             
             if (hasConnection && slotInfo) {
-              const slot = slotIndex ?? 0
+              // FAIL FAST - Never guess slot indices!
+              if (slotIndex === null || slotIndex === undefined) {
+                console.error('[LabelNode-Hook] ERROR: Could not determine slot index!', {
+                  node: node?.id,
+                  slotInfo,
+                  nodeInputs: node?.inputs,
+                  nodeOutputs: node?.outputs
+                })
+                // Don't add any menu items if we can't determine the slot
+                return new OrigContextMenu(values, options)
+              }
+              
+              const slot = slotIndex
+              console.log('[LabelNode-Hook] Using slot index:', slot)
               // Check if it's an output slot (NodeOutputSlot) or input slot
               const isOutput = slotInfo.constructor.name === 'NodeOutputSlot'
               
@@ -406,7 +611,16 @@ app.registerExtension({
                 })
               } else {
                 // Connecting to existing label from input
+                console.log('[LabelNode-Hook] Checking for input slot labels:', {
+                  nodeId: node?.id,
+                  slot,
+                  inputSlot: node?.inputs?.[slot],
+                  slotType: node?.inputs?.[slot]?.type
+                })
+                
                 const compatibleLabels = getCompatibleLabels(node, slot)
+                console.log('[LabelNode-Hook] Compatible labels found:', compatibleLabels.length, compatibleLabels)
+                
                 if (compatibleLabels.length > 0) {
                   // Add submenu for connecting to labels
                   const submenuItems = compatibleLabels.map(label => ({
@@ -423,6 +637,9 @@ app.registerExtension({
                       options: submenuItems
                     }
                   })
+                } else {
+                  // Show why no labels were found for debugging
+                  console.log('[LabelNode-Hook] No compatible labels. Current labels:', app.labelDictionary)
                 }
               }
             } else {

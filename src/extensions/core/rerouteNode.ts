@@ -35,7 +35,7 @@ app.registerExtension({
             this.onConnectionsChange(LiteGraph.INPUT, null, true, null)
           })
         }
-
+        
         this.onConnectionsChange = (type, _index, connected) => {
           if (app.configuringGraph) return
 
@@ -277,6 +277,12 @@ app.registerExtension({
         )
         return []
       }
+      // Override to hide input/output slot circles for cleaner appearance
+      override drawSlots(_ctx: CanvasRenderingContext2D): void {
+        // Do nothing - this prevents drawing the slot circles
+        // The connections will still work, just won't show the circles
+      }
+      
       override computeSize(): [number, number] {
         return [
           this.properties.showOutputText && this.outputs && this.outputs.length
