@@ -50,8 +50,14 @@ class LabelNode extends LGraphNode {
     // The connections will still work, just won't show the circles
   }
   
-  // Prevent disconnecting the input
+  // Prevent disconnecting the input (for output-type labels)
   override disconnectInput(_slot: number): boolean {
+    // Don't allow disconnecting - labels should be deleted instead
+    return false
+  }
+  
+  // Prevent disconnecting the output (for input-type labels)
+  override disconnectOutput(_slot: number): boolean {
     // Don't allow disconnecting - labels should be deleted instead
     return false
   }
@@ -75,7 +81,7 @@ class LabelNode extends LGraphNode {
     return null
   }
   
-  // Prevent multiple connections to the input
+  // Prevent multiple connections to the input (for output-type labels)
   override onConnectInput(
     inputIndex: number,
     _outputType: any,
@@ -83,12 +89,41 @@ class LabelNode extends LGraphNode {
     _outputNode: any,
     _outputIndex: number
   ): boolean {
-    // Check if there's already a connection
+    // Input-type labels shouldn't have inputs at all
+    if (this.labelDirection === 'input') {
+      console.log('[LabelNode] Input-type label rejecting input connection')
+      return false
+    }
+    
+    // Output-type labels can have one input
     if (this.inputs[inputIndex].link !== null) {
       console.log('[LabelNode] Rejecting connection - label already has input')
       return false // Reject the connection
     }
     return true // Allow first connection
+  }
+  
+  // Prevent connections from output (for input-type labels) 
+  override onConnectOutput(
+    outputIndex: number,
+    _inputType: any,
+    _inputSlot: any,
+    _inputNode: any,
+    _inputIndex: number
+  ): boolean {
+    // Output-type labels shouldn't have outputs at all
+    if (this.labelDirection === 'output') {
+      console.log('[LabelNode] Output-type label rejecting output connection')
+      return false
+    }
+    
+    // Input-type labels can have connections from their output
+    // But only allow one connection
+    if (this.outputs[outputIndex].links && this.outputs[outputIndex].links.length > 0) {
+      console.log('[LabelNode] Rejecting connection - label output already connected')
+      return false
+    }
+    return true
   }
   
   // Store original connection info to restore if disconnected
@@ -101,23 +136,48 @@ class LabelNode extends LGraphNode {
     isConnected: boolean,
     link: any
   ): void {
-    if (type === 1 && slotIndex === 0) { // INPUT connection changed
+    // Handle both input and output connections based on label direction
+    const isInputConnection = (type === 1) // LiteGraph.INPUT
+    const isOutputConnection = (type === 2) // LiteGraph.OUTPUT
+    
+    if ((this.labelDirection === 'output' && isInputConnection && slotIndex === 0) ||
+        (this.labelDirection === 'input' && isOutputConnection && slotIndex === 0)) {
       if (isConnected && link) {
         // Store the connection info when connected
-        this.originalConnection = {
-          nodeId: link.origin_id,
-          slotIndex: link.origin_slot
+        if (this.labelDirection === 'output') {
+          // For output labels, store the source that connects TO this label
+          this.originalConnection = {
+            nodeId: link.origin_id,
+            slotIndex: link.origin_slot
+          }
+        } else {
+          // For input labels, store the target that this label connects TO
+          this.originalConnection = {
+            nodeId: link.target_id,
+            slotIndex: link.target_slot
+          }
         }
-        console.log('[LabelNode] Stored connection info:', this.originalConnection)
+        console.log('[LabelNode] Stored connection info:', this.originalConnection, 'direction:', this.labelDirection)
       } else if (!isConnected && this.originalConnection) {
         // Connection was removed, restore it immediately
         console.log('[LabelNode] Restoring connection to prevent disconnection')
-        const sourceNode = app.graph.getNodeById(this.originalConnection.nodeId)
-        if (sourceNode) {
-          // Restore the connection
-          setTimeout(() => {
-            sourceNode.connect(this.originalConnection!.slotIndex, this, 0)
-          }, 0)
+        
+        if (this.labelDirection === 'output') {
+          // Restore connection TO this label
+          const sourceNode = app.graph.getNodeById(this.originalConnection.nodeId)
+          if (sourceNode) {
+            setTimeout(() => {
+              sourceNode.connect(this.originalConnection!.slotIndex, this, 0)
+            }, 0)
+          }
+        } else {
+          // Restore connection FROM this label
+          const targetNode = app.graph.getNodeById(this.originalConnection.nodeId)
+          if (targetNode) {
+            setTimeout(() => {
+              this.connect(0, targetNode, this.originalConnection!.slotIndex)
+            }, 0)
+          }
         }
       }
     }
@@ -358,37 +418,42 @@ app.registerExtension({
     
     // Function to connect an input to a label
     function connectToLabel(node: LGraphNode, slotIndex: number, label: {name: string, metadata: LabelMetadata}): void {
-      const metadata = label.metadata
-      const sourceNode = app.graph.getNodeById(metadata.nodeId)
-      if (!sourceNode) return
-      
-      // Find the output slot index
-      let outputSlotIndex = -1
-      for (let i = 0; i < sourceNode.outputs.length; i++) {
-        if (sourceNode.outputs[i].name === metadata.slotName) {
-          outputSlotIndex = i
-          break
-        }
-      }
-      
-      if (outputSlotIndex === -1) return
-      
-      // Create the actual connection between nodes
-      sourceNode.connect(outputSlotIndex, node, slotIndex)
-      
-      // Create a visual label anchor for the input side
+      // Create a label node for the INPUT side
+      // This label has OUTPUT only (no input) to connect to the node's input
       const inputLabelNode = LiteGraph.createNode('Label') as LabelNode
       if (!inputLabelNode) return
       
       inputLabelNode.labelName = label.name
       inputLabelNode.labelDirection = 'input'
+      
+      // IMPORTANT: Input-side labels have OUTPUT only, no input!
+      // We need to reconfigure the node
+      inputLabelNode.removeInput(0) // Remove the default input
+      inputLabelNode.addOutput("", "*") // Add an output instead
+      
+      // Position the label to the left of the input
       inputLabelNode.pos = [
         node.pos[0] - 150,
         node.pos[1] + (slotIndex * 20)
       ]
       
       app.graph.add(inputLabelNode)
+      
+      // Connect the label's OUTPUT to the node's INPUT
+      // This is the only connection - NO connection between actual nodes!
+      inputLabelNode.connect(0, node, slotIndex)
+      
+      // Update node size to fit label
       inputLabelNode.setSize(inputLabelNode.computeSize())
+      
+      console.log('[LabelNode] Created input-side label:', {
+        labelName: label.name,
+        labelId: inputLabelNode.id,
+        targetNodeId: node.id,
+        targetSlot: slotIndex,
+        hasOutput: inputLabelNode.outputs.length > 0,
+        hasInput: inputLabelNode.inputs.length > 0
+      })
     }
     
     // Track hook installation
