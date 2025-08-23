@@ -14,8 +14,12 @@ interface LabelMetadata {
 }
 
 interface LabelNode extends LGraphNode {
-  labelName?: string
-  labelDirection?: 'input' | 'output'
+  // labelName and labelDirection are stored in properties for serialization
+  properties: {
+    labelName?: string
+    labelDirection?: 'input' | 'output'
+    [key: string]: any
+  }
 }
 
 // Label dictionary is now stored per-workflow in app.graph.extra.labelDictionary
@@ -23,9 +27,8 @@ interface LabelNode extends LGraphNode {
 
 class LabelNode extends LGraphNode {
   static override category: string | undefined
-  labelName?: string
-  labelDirection?: 'input' | 'output'
   dictionaryKey?: string  // Key used to store/remove from labelDictionary
+  // labelName and labelDirection are stored in this.properties for serialization
   
   constructor(title?: string) {
     super(title || 'Label')
@@ -87,7 +90,7 @@ class LabelNode extends LGraphNode {
     _outputIndex: number
   ): boolean {
     // Input-type labels shouldn't have inputs at all
-    if (this.labelDirection === 'input') {
+    if (this.properties?.labelDirection === 'input') {
       console.log('[LabelNode] Input-type label rejecting input connection')
       return false
     }
@@ -109,7 +112,7 @@ class LabelNode extends LGraphNode {
     _inputIndex: number
   ): boolean {
     // Output-type labels shouldn't have outputs at all
-    if (this.labelDirection === 'output') {
+    if (this.properties?.labelDirection === 'output') {
       console.log('[LabelNode] Output-type label rejecting output connection')
       return false
     }
@@ -137,11 +140,11 @@ class LabelNode extends LGraphNode {
     const isInputConnection = (type === 1) // LiteGraph.INPUT
     const isOutputConnection = (type === 2) // LiteGraph.OUTPUT
     
-    if ((this.labelDirection === 'output' && isInputConnection && slotIndex === 0) ||
-        (this.labelDirection === 'input' && isOutputConnection && slotIndex === 0)) {
+    if ((this.properties?.labelDirection === 'output' && isInputConnection && slotIndex === 0) ||
+        (this.properties?.labelDirection === 'input' && isOutputConnection && slotIndex === 0)) {
       if (isConnected && link) {
         // Store the connection info when connected
-        if (this.labelDirection === 'output') {
+        if (this.properties?.labelDirection === 'output') {
           // For output labels, store the source that connects TO this label
           this.originalConnection = {
             nodeId: link.origin_id,
@@ -154,12 +157,12 @@ class LabelNode extends LGraphNode {
             slotIndex: link.target_slot
           }
         }
-        console.log('[LabelNode] Stored connection info:', this.originalConnection, 'direction:', this.labelDirection)
+        console.log('[LabelNode] Stored connection info:', this.originalConnection, 'direction:', this.properties?.labelDirection)
       } else if (!isConnected && this.originalConnection) {
         // Connection was removed, restore it immediately
         console.log('[LabelNode] Restoring connection to prevent disconnection')
         
-        if (this.labelDirection === 'output') {
+        if (this.properties?.labelDirection === 'output') {
           // Restore connection TO this label
           const sourceNode = app.graph.getNodeById(this.originalConnection.nodeId)
           if (sourceNode) {
@@ -181,11 +184,11 @@ class LabelNode extends LGraphNode {
   }
   
   override computeSize(): [number, number] {
-    if (!this.labelName) return [100, 30]
+    if (!this.properties?.labelName) return [100, 30]
     
     const ctx = app.canvas.ctx
     ctx.font = `${LiteGraph.NODE_TEXT_SIZE}px Arial`
-    const textWidth = ctx.measureText(this.labelName).width
+    const textWidth = ctx.measureText(this.properties.labelName).width
     
     return [
       Math.max(100, textWidth + 20), // Padding of 10 on each side
@@ -195,15 +198,15 @@ class LabelNode extends LGraphNode {
   
   // Custom drawing for label appearance
   override onDrawForeground(ctx: CanvasRenderingContext2D): void {
-    if (!this.labelName) return
+    if (!this.properties?.labelName) return
     
     // Different colors for input vs output labels
-    const bgColor = this.labelDirection === 'output' 
+    const bgColor = this.properties?.labelDirection === 'output' 
       ? 'rgba(130, 200, 130, 0.9)'  // Green for outputs
       : 'rgba(130, 130, 200, 0.9)'  // Blue for inputs
     
     const textColor = '#ffffff'
-    const borderColor = this.labelDirection === 'output'
+    const borderColor = this.properties?.labelDirection === 'output'
       ? 'rgba(100, 170, 100, 1)'
       : 'rgba(100, 100, 170, 1)'
     
@@ -241,7 +244,7 @@ class LabelNode extends LGraphNode {
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     // Center text in the middle of the node
-    ctx.fillText(this.labelName, this.size[0] / 2, this.size[1] / 2)
+    ctx.fillText(this.properties.labelName, this.size[0] / 2, this.size[1] / 2)
   }
   
   override getExtraMenuOptions(_: any, options: IContextMenuValue[]): IContextMenuValue[] {
@@ -265,7 +268,7 @@ class LabelNode extends LGraphNode {
       console.log('[LabelNode] No labelDictionary found in graph.extra')
       return
     }
-    console.log('[LabelNode] Removing from dictionary:', this.dictionaryKey, 'direction:', this.labelDirection)
+    console.log('[LabelNode] Removing from dictionary:', this.dictionaryKey, 'direction:', this.properties?.labelDirection)
     console.log('[LabelNode] Dictionary before removal:', { ...labelDict })
     delete labelDict[this.dictionaryKey]
     console.log('[LabelNode] Dictionary after removal:', { ...labelDict })
@@ -397,8 +400,8 @@ app.registerExtension({
       const labelNode = LiteGraph.createNode('Label') as LabelNode
       if (!labelNode) return
       
-      labelNode.labelName = labelName
-      labelNode.labelDirection = 'output'
+      labelNode.properties.labelName = labelName
+      labelNode.properties.labelDirection = 'output'
       labelNode.dictionaryKey = labelName  // For output labels, key is the label name
       
       // Position it where the mouse was released
@@ -461,8 +464,8 @@ app.registerExtension({
       const inputLabelNode = LiteGraph.createNode('Label') as LabelNode
       if (!inputLabelNode) return
       
-      inputLabelNode.labelName = label.name
-      inputLabelNode.labelDirection = 'input'
+      inputLabelNode.properties.labelName = label.name
+      inputLabelNode.properties.labelDirection = 'input'
       
       // Create a unique dictionary key for input labels
       const dictionaryKey = `${label.name}_input_${node.id}_${slotIndex}`
