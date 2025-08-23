@@ -256,11 +256,19 @@ class LabelNode extends LGraphNode {
   }
   
   removeLabelFromDictionary(): void {
-    if (!this.dictionaryKey) return
+    if (!this.dictionaryKey) {
+      console.log('[LabelNode] No dictionaryKey to remove')
+      return
+    }
     const labelDict = (app.graph?.extra as any)?.labelDictionary as Record<string, LabelMetadata> | undefined
-    if (!labelDict) return
+    if (!labelDict) {
+      console.log('[LabelNode] No labelDictionary found in graph.extra')
+      return
+    }
     console.log('[LabelNode] Removing from dictionary:', this.dictionaryKey, 'direction:', this.labelDirection)
+    console.log('[LabelNode] Dictionary before removal:', { ...labelDict })
     delete labelDict[this.dictionaryKey]
+    console.log('[LabelNode] Dictionary after removal:', { ...labelDict })
   }
   
   override onRemoved(): void {
@@ -287,11 +295,11 @@ app.registerExtension({
       // Check if this link is connected to a label node
       const link = app.graph.links[linkId]
       if (link) {
-        // Check if target node is a label
+        // Check if target node is a label (output label case)
         const targetNode = app.graph.getNodeById(link.target_id) as LabelNode
         if (targetNode && targetNode.type === 'Label') {
-          // Remove the label node when its link is removed
-          console.log('[LabelNode] Removing label node', targetNode.id, 'because its link was deleted')
+          // Remove the label node when its input link is removed
+          console.log('[LabelNode] Removing output label node', targetNode.id, 'because its link was deleted')
           // Clean up dictionary entry using dictionaryKey
           const labelDict = (app.graph.extra as any)?.labelDictionary as Record<string, LabelMetadata> | undefined
           if (targetNode.dictionaryKey && labelDict?.[targetNode.dictionaryKey]) {
@@ -299,6 +307,21 @@ app.registerExtension({
             delete labelDict[targetNode.dictionaryKey]
           }
           app.graph.remove(targetNode)
+          return // The link will be removed as part of removing the node
+        }
+        
+        // Check if origin node is a label (input label case)
+        const originNode = app.graph.getNodeById(link.origin_id) as LabelNode
+        if (originNode && originNode.type === 'Label') {
+          // Remove the label node when its output link is removed
+          console.log('[LabelNode] Removing input label node', originNode.id, 'because its link was deleted')
+          // Clean up dictionary entry using dictionaryKey
+          const labelDict = (app.graph.extra as any)?.labelDictionary as Record<string, LabelMetadata> | undefined
+          if (originNode.dictionaryKey && labelDict?.[originNode.dictionaryKey]) {
+            console.log('[LabelNode] Removing from dictionary:', originNode.dictionaryKey)
+            delete labelDict[originNode.dictionaryKey]
+          }
+          app.graph.remove(originNode)
           return // The link will be removed as part of removing the node
         }
       }
@@ -358,6 +381,8 @@ app.registerExtension({
       
       // Check for duplicates
       if (labelDict[labelName]) {
+        console.log('[LabelNode] Duplicate check failed. Label exists:', labelName, labelDict[labelName])
+        console.log('[LabelNode] Current dictionary:', labelDict)
         const toastStore = useToastStore()
         toastStore.add({
           severity: 'error',
