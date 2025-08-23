@@ -29,6 +29,7 @@ class LabelNode extends LGraphNode {
   static override category: string | undefined
   labelName?: string
   labelDirection?: 'input' | 'output'
+  dictionaryKey?: string  // Key used to store/remove from labelDictionary
   
   constructor(title?: string) {
     super(title || 'Label')
@@ -259,8 +260,9 @@ class LabelNode extends LGraphNode {
   }
   
   removeLabelFromDictionary(): void {
-    if (!this.labelName || !app.labelDictionary) return
-    delete app.labelDictionary[this.labelName]
+    if (!this.dictionaryKey || !app.labelDictionary) return
+    console.log('[LabelNode] Removing from dictionary:', this.dictionaryKey, 'direction:', this.labelDirection)
+    delete app.labelDictionary[this.dictionaryKey]
   }
   
   override onRemoved(): void {
@@ -291,10 +293,10 @@ app.registerExtension({
         if (targetNode && targetNode.type === 'Label') {
           // Remove the label node when its link is removed
           console.log('[LabelNode] Removing label node', targetNode.id, 'because its link was deleted')
-          // Clean up dictionary entry
-          if (targetNode.labelName && app.labelDictionary[targetNode.labelName]) {
-            console.log('[LabelNode] Removing from dictionary:', targetNode.labelName)
-            delete app.labelDictionary[targetNode.labelName]
+          // Clean up dictionary entry using dictionaryKey
+          if (targetNode.dictionaryKey && app.labelDictionary[targetNode.dictionaryKey]) {
+            console.log('[LabelNode] Removing from dictionary:', targetNode.dictionaryKey)
+            delete app.labelDictionary[targetNode.dictionaryKey]
           }
           app.graph.remove(targetNode)
           return // The link will be removed as part of removing the node
@@ -319,10 +321,10 @@ app.registerExtension({
                 if (targetNode && targetNode.type === 'Label') {
                   // Also remove the label when source node is deleted
                   console.log('[LabelNode] Removing orphaned label', targetNode.id)
-                  // Clean up dictionary entry
-                  if (targetNode.labelName && app.labelDictionary[targetNode.labelName]) {
-                    console.log('[LabelNode] Removing from dictionary:', targetNode.labelName)
-                    delete app.labelDictionary[targetNode.labelName]
+                  // Clean up dictionary entry using dictionaryKey
+                  if (targetNode.dictionaryKey && app.labelDictionary[targetNode.dictionaryKey]) {
+                    console.log('[LabelNode] Removing from dictionary:', targetNode.dictionaryKey)
+                    delete app.labelDictionary[targetNode.dictionaryKey]
                   }
                   originalRemoveNode.call(this, targetNode)
                 }
@@ -363,6 +365,7 @@ app.registerExtension({
       
       labelNode.labelName = labelName
       labelNode.labelDirection = 'output'
+      labelNode.dictionaryKey = labelName  // For output labels, key is the label name
       
       // Position it where the mouse was released
       // The event position should be in the options passed to the context menu
@@ -426,6 +429,10 @@ app.registerExtension({
       inputLabelNode.labelName = label.name
       inputLabelNode.labelDirection = 'input'
       
+      // Create a unique dictionary key for input labels
+      const dictionaryKey = `${label.name}_input_${node.id}_${slotIndex}`
+      inputLabelNode.dictionaryKey = dictionaryKey
+      
       // IMPORTANT: Input-side labels have OUTPUT only, no input!
       // We need to reconfigure the node
       inputLabelNode.removeInput(0) // Remove the default input
@@ -460,8 +467,21 @@ app.registerExtension({
       // This is the only connection - NO connection between actual nodes!
       inputLabelNode.connect(0, node, slotIndex)
       
+      // Add input label to dictionary for export system
+      const inputSlot = node.inputs[slotIndex]
+      if (inputSlot) {
+        app.labelDictionary[dictionaryKey] = {
+          nodeId: Number(node.id),
+          slotName: inputSlot.name || `input_${slotIndex}`,
+          slotType: String(inputSlot.type || '*'),
+          direction: 'input',
+          connectedToLabel: label.name  // Reference to the output label
+        } as any
+      }
+      
       console.log('[LabelNode] Created input-side label:', {
         labelName: label.name,
+        dictionaryKey: dictionaryKey,
         labelId: inputLabelNode.id,
         targetNodeId: node.id,
         targetSlot: slotIndex,
