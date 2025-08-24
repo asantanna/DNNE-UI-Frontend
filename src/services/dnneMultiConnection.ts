@@ -5,19 +5,213 @@
  * All inputs accept multiple connections by default unless marked with single_conn_only.
  */
 
-import { LGraphNode } from '@comfyorg/litegraph'
+import { LGraphNode, LiteGraph } from '@comfyorg/litegraph'
 import type { LLink, LinkId } from '@comfyorg/litegraph'
 import { app } from '@/scripts/app'
+
+// Track if shift key is currently pressed for drag operations
+let shiftKeyPressed = false
 
 /**
  * Initializes multiple connection support by overriding LiteGraph methods
  */
 export function initializeMultiConnectionSupport() {
   console.log('[DNNE] Initializing multi-connection support')
+  console.log('[DNNE] LGraphNode.prototype.connectSlots exists:', !!LGraphNode.prototype.connectSlots)
   
-  // Store original methods
+  // FIRST: Override connectSlots to prevent automatic disconnection for multi-connection inputs
+  // This must happen BEFORE we capture originalConnect, so originalConnect uses our modified connectSlots
+  LGraphNode.prototype.connectSlots = function(
+    output: any,
+    inputNode: LGraphNode,
+    input: any,
+    afterRerouteId?: any
+  ): LLink | null {
+    console.log('[DNNE] connectSlots override called!', {
+      output,
+      input,
+      hasExistingLink: input?.link != null
+    })
+    
+    const { graph } = this
+    if (!graph) {
+      console.error('[DNNE] No graph available')
+      return null
+    }
+    
+    const outputIndex = this.outputs.indexOf(output)
+    if (outputIndex === -1) {
+      console.warn('connectSlots: output not found')
+      return null
+    }
+    
+    const inputIndex = inputNode.inputs.indexOf(input)
+    if (inputIndex === -1) {
+      console.warn('connectSlots: input not found')
+      return null
+    }
+    
+    if (!LiteGraph.isValidConnection(output.type, input.type)) {
+      this.setDirtyCanvas(false, true)
+      return null
+    }
+    
+    if (inputNode.onConnectInput?.(inputIndex, output.type, output, this, outputIndex) === false) {
+      return null
+    }
+    
+    if (this.onConnectOutput?.(outputIndex, input.type, input, inputNode, inputIndex) === false) {
+      return null
+    }
+    
+    // MODIFIED: Check if we should disconnect existing connections
+    const existingLink = inputNode.inputs[inputIndex]?.link
+    if (existingLink != null) {
+      console.log('[DNNE] Input has existing connection. single_conn_only:', input.single_conn_only)
+      // Only disconnect if the input is marked as single_conn_only
+      // For multi-connection inputs, we keep existing connections
+      if (input.single_conn_only === true) {
+        console.log('[DNNE] Disconnecting existing connection (single_conn_only = true)')
+        graph.beforeChange()
+        inputNode.disconnectInput(inputIndex, true)
+      } else {
+        console.log('[DNNE] Preserving existing connection(s) for multi-connection input')
+        // Initialize links array if needed and preserve the existing link
+        if (!inputNode.inputs[inputIndex].links) {
+          inputNode.inputs[inputIndex].links = []
+        }
+        // Add existing link to array if not already there
+        if (!inputNode.inputs[inputIndex].links.includes(existingLink)) {
+          inputNode.inputs[inputIndex].links.push(existingLink)
+          console.log('[DNNE] Preserved existing link in array:', existingLink)
+        }
+      }
+    } else {
+      console.log('[DNNE] No existing connection on input')
+    }
+    
+    // Create the new link (LLink constructor is available on LiteGraph)
+    const LLink = (LiteGraph as any).LLink
+    const link = new LLink(
+      ++graph.state.lastLinkId,
+      input.type || output.type,
+      this.id,
+      outputIndex,
+      inputNode.id,
+      inputIndex,
+      afterRerouteId
+    )
+    
+    // Add link to graph
+    graph._links.set(link.id, link)
+    
+    // Update output links array
+    output.links ??= []
+    output.links.push(link.id)
+    
+    // Update input link(s)
+    if (!input.single_conn_only) {
+      // For multi-connection inputs, add to the links array
+      if (!inputNode.inputs[inputIndex].links) {
+        inputNode.inputs[inputIndex].links = []
+      }
+      inputNode.inputs[inputIndex].links.push(link.id)
+      console.log('[DNNE] Added new link to multi-connection array. Total:', inputNode.inputs[inputIndex].links.length)
+    }
+    // Update the single link field for compatibility
+    // Now that rendering supports links array, we can just set it to the new link
+    inputNode.inputs[inputIndex].link = link.id
+    
+    // Handle reroutes if they exist
+    if (LLink?.getReroutes) {
+      const reroutes = LLink.getReroutes(graph, link)
+      for (const reroute of reroutes) {
+        reroute.linkIds.add(link.id)
+        if (reroute.floating) delete reroute.floating
+        reroute._dragging = undefined
+      }
+      
+      const lastReroute = reroutes.at(-1)
+      if (lastReroute) {
+        for (const linkId of lastReroute.floatingLinkIds || []) {
+          const link2 = graph.floatingLinks?.get(linkId)
+          if (link2 && link2.parentId === lastReroute.id) {
+            graph.removeFloatingLink?.(link2)
+          }
+        }
+      }
+    }
+    
+    // Update graph version and trigger callbacks
+    graph._version++
+    
+    // Use numeric constants for NodeSlotType (OUTPUT = 1, INPUT = 2)
+    this.onConnectionsChange?.(1, outputIndex, true, link, output)
+    inputNode.onConnectionsChange?.(2, inputIndex, true, link, input)
+    
+    this.setDirtyCanvas(false, true)
+    graph.afterChange()
+    graph.connectionChange(this)
+    
+    return link
+  }
+  
+  // NOW store original methods (AFTER overriding connectSlots)
   const originalConnect = LGraphNode.prototype.connect
   const originalDisconnectInput = LGraphNode.prototype.disconnectInput
+  
+  // Track shift key state globally
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Shift') {
+      shiftKeyPressed = true
+    }
+  })
+  
+  document.addEventListener('keyup', (e) => {
+    if (e.key === 'Shift') {
+      shiftKeyPressed = false
+    }
+  })
+  
+  // Also track from mouse events (more reliable during drag)
+  document.addEventListener('pointermove', (e) => {
+    shiftKeyPressed = e.shiftKey
+  })
+  
+  document.addEventListener('pointerdown', (e) => {
+    shiftKeyPressed = e.shiftKey
+  })
+  
+  // We need to wait for canvas to be available, so we'll override when it's ready
+  // This is done in the app initialization after canvas is created
+  const setupLinkConnectorOverride = () => {
+    if (!app.canvas?.linkConnector) {
+      // Try again later
+      setTimeout(setupLinkConnectorOverride, 100)
+      return
+    }
+    
+    const linkConnector = app.canvas.linkConnector
+    const originalMoveInputLink = linkConnector.moveInputLink
+    
+    linkConnector.moveInputLink = function(network: any, input: any) {
+      // Only allow moving (which disconnects) if shift is pressed
+      if (!shiftKeyPressed) {
+        console.log('[DNNE] Preventing input disconnection - shift key not pressed')
+        // Instead of moving, we should start a new connection
+        // Return without doing anything - this prevents the disconnection
+        return
+      }
+      // Allow normal behavior when shift is pressed
+      console.log('[DNNE] Allowing input disconnection - shift key pressed')
+      return originalMoveInputLink.call(this, network, input)
+    }
+    
+    console.log('[DNNE] LinkConnector override installed')
+  }
+  
+  // Start trying to setup the override
+  setupLinkConnectorOverride()
   
   /**
    * Override connect method to handle multiple connections
