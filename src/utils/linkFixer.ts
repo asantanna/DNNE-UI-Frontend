@@ -201,7 +201,10 @@ export function fixBadLinks(
     // Patched data should be canonical. We can double check if fixing too.
     let has = false
     if (ioDir === IoDirection.INPUT) {
-      const nodeHasIt = node.inputs?.[slot]?.link === linkId
+      // DNNE: Check both single link field and multi-connection links array
+      const input = node.inputs?.[slot]
+      const nodeHasIt = input?.link === linkId || 
+                       (input?.links && Array.isArray(input.links) && input.links.includes(linkId))
       if (patchedNodeSlots[node.id]?.['inputs']) {
         const patchedHasIt =
           patchedNodeSlots[node.id]!['inputs']![slot] === linkId
@@ -241,7 +244,10 @@ export function fixBadLinks(
     // Patched data should be canonical. We can double check if fixing too.
     let hasAny = false
     if (ioDir === IoDirection.INPUT) {
-      const nodeHasAny = node.inputs?.[slot]?.link != null
+      // DNNE: Check both single link field and multi-connection links array
+      const input = node.inputs?.[slot]
+      const nodeHasAny = input?.link != null || 
+                        (input?.links && Array.isArray(input.links) && input.links.length > 0)
       if (patchedNodeSlots[node.id]?.['inputs']) {
         const patchedHasAny =
           patchedNodeSlots[node.id]!['inputs']![slot] != null

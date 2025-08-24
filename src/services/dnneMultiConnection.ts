@@ -213,6 +213,54 @@ export function initializeMultiConnectionSupport() {
   // Start trying to setup the override
   setupLinkConnectorOverride()
   
+  // Override configure to restore links arrays
+  const originalConfigure = LGraphNode.prototype.configure
+  LGraphNode.prototype.configure = function(info: any) {
+    // Call original configure first
+    originalConfigure.call(this, info)
+    
+    // Restore links arrays for multi-connection inputs
+    if (info.inputs) {
+      for (let i = 0; i < info.inputs.length; i++) {
+        const inputInfo = info.inputs[i]
+        const input = this.inputs[i]
+        
+        if (input && inputInfo.links && Array.isArray(inputInfo.links)) {
+          // Restore the links array from serialized data
+          input.links = [...inputInfo.links]
+          console.log(`[DNNE] Restored links array for input ${i}:`, input.links)
+          
+          // Ensure link field has a value for compatibility
+          if (input.links.length > 0 && !input.link) {
+            input.link = input.links[0]
+          }
+        }
+      }
+    }
+  }
+  
+  // Override serialize to save links arrays
+  const originalSerialize = LGraphNode.prototype.serialize
+  LGraphNode.prototype.serialize = function() {
+    const data = originalSerialize.call(this)
+    
+    // Save links arrays for multi-connection inputs
+    if (this.inputs && data.inputs) {
+      for (let i = 0; i < this.inputs.length; i++) {
+        const input = this.inputs[i]
+        if (input && input.links && input.links.length > 0) {
+          // Ensure the serialized input has the links array
+          if (data.inputs[i] && !data.inputs[i].links) {
+            data.inputs[i].links = [...input.links]
+            console.log(`[DNNE] Serialized links array for input ${i}:`, input.links)
+          }
+        }
+      }
+    }
+    
+    return data
+  }
+  
   /**
    * Override connect method to handle multiple connections
    */
