@@ -4,30 +4,30 @@ import { app } from '../../scripts/app'
 import { useToastStore } from '../../stores/toastStore'
 
 // Node that provides connection labels for cleaner graphs
-
-interface LabelMetadata {
-  nodeId: number
-  slotName: string
-  slotType: string
-  direction: 'input' | 'output'
-  anchorNodeId?: number
-}
+// VERSION 4.0 - Dictionary-free implementation using node properties
 
 interface LabelNode extends LGraphNode {
   // labelName and labelDirection are stored in properties for serialization
   properties: {
     labelName?: string
     labelDirection?: 'input' | 'output'
+    // For output labels - source connection info
+    sourceNodeId?: number
+    sourceSlotIndex?: number
+    sourceSlotName?: string
+    sourceSlotType?: string
+    // For input labels - target connection info
+    targetNodeId?: number
+    targetSlotIndex?: number
+    targetSlotName?: string
+    targetSlotType?: string
+    connectedToLabel?: string  // Name of output label this connects to
     [key: string]: any
   }
 }
 
-// Label dictionary is now stored per-workflow in app.graph.extra.labelDictionary
-// This prevents collisions between multiple open workflows
-
 class LabelNode extends LGraphNode {
   static override category: string | undefined
-  dictionaryKey?: string  // Key used to store/remove from labelDictionary
   // labelName and labelDirection are stored in this.properties for serialization
   
   constructor(title?: string) {
@@ -251,31 +251,15 @@ class LabelNode extends LGraphNode {
     options.unshift({
       content: 'Delete Label',
       callback: () => {
-        this.removeLabelFromDictionary()
+        // No cleanup needed - just remove the node
         app.graph.remove(this)
       }
     })
     return []
   }
   
-  removeLabelFromDictionary(): void {
-    if (!this.dictionaryKey) {
-      console.log('[LabelNode] No dictionaryKey to remove')
-      return
-    }
-    const labelDict = (app.graph?.extra as any)?.labelDictionary as Record<string, LabelMetadata> | undefined
-    if (!labelDict) {
-      console.log('[LabelNode] No labelDictionary found in graph.extra')
-      return
-    }
-    console.log('[LabelNode] Removing from dictionary:', this.dictionaryKey, 'direction:', this.properties?.labelDirection)
-    console.log('[LabelNode] Dictionary before removal:', { ...labelDict })
-    delete labelDict[this.dictionaryKey]
-    console.log('[LabelNode] Dictionary after removal:', { ...labelDict })
-  }
-  
   override onRemoved(): void {
-    this.removeLabelFromDictionary()
+    // No cleanup needed - labels are self-contained with all info in properties
     super.onRemoved?.()
   }
 }
@@ -284,86 +268,10 @@ app.registerExtension({
   name: 'Comfy.LabelNode',
   
   async setup() {
-    console.log('[LabelNode] Extension setup starting... VERSION 3.1 - FIXED')
+    console.log('[LabelNode] Extension setup starting... VERSION 4.0 - DICTIONARY-FREE')
     
-    // Initialize label dictionary in graph.extra if not exists
-    if (!app.graph.extra) app.graph.extra = {} as any
-    if (!(app.graph.extra as any).labelDictionary) {
-      (app.graph.extra as any).labelDictionary = {} as Record<string, LabelMetadata>
-    }
-    
-    // Hook into graph changes to detect link removal
-    const originalRemoveLink = app.graph.removeLink
-    app.graph.removeLink = function(linkId: number) {
-      // Check if this link is connected to a label node
-      const link = app.graph.links[linkId]
-      if (link) {
-        // Check if target node is a label (output label case)
-        const targetNode = app.graph.getNodeById(link.target_id) as LabelNode
-        if (targetNode && targetNode.type === 'Label') {
-          // Remove the label node when its input link is removed
-          console.log('[LabelNode] Removing output label node', targetNode.id, 'because its link was deleted')
-          // Clean up dictionary entry using dictionaryKey
-          const labelDict = (app.graph.extra as any)?.labelDictionary as Record<string, LabelMetadata> | undefined
-          if (targetNode.dictionaryKey && labelDict?.[targetNode.dictionaryKey]) {
-            console.log('[LabelNode] Removing from dictionary:', targetNode.dictionaryKey)
-            delete labelDict[targetNode.dictionaryKey]
-          }
-          app.graph.remove(targetNode)
-          return // The link will be removed as part of removing the node
-        }
-        
-        // Check if origin node is a label (input label case)
-        const originNode = app.graph.getNodeById(link.origin_id) as LabelNode
-        if (originNode && originNode.type === 'Label') {
-          // Remove the label node when its output link is removed
-          console.log('[LabelNode] Removing input label node', originNode.id, 'because its link was deleted')
-          // Clean up dictionary entry using dictionaryKey
-          const labelDict = (app.graph.extra as any)?.labelDictionary as Record<string, LabelMetadata> | undefined
-          if (originNode.dictionaryKey && labelDict?.[originNode.dictionaryKey]) {
-            console.log('[LabelNode] Removing from dictionary:', originNode.dictionaryKey)
-            delete labelDict[originNode.dictionaryKey]
-          }
-          app.graph.remove(originNode)
-          return // The link will be removed as part of removing the node
-        }
-      }
-      
-      // Call original removeLink for non-label links
-      return originalRemoveLink.call(this, linkId)
-    }
-    
-    // Hook into node removal to clean up orphaned labels
-    const originalRemoveNode = app.graph.remove
-    app.graph.remove = function(node: LGraphNode) {
-      // Check if this node has any labels connected to it
-      if (node.outputs) {
-        for (const output of node.outputs) {
-          if (output.links) {
-            for (const linkId of output.links) {
-              const link = app.graph.links[linkId]
-              if (link) {
-                const targetNode = app.graph.getNodeById(link.target_id) as LabelNode
-                if (targetNode && targetNode.type === 'Label') {
-                  // Also remove the label when source node is deleted
-                  console.log('[LabelNode] Removing orphaned label', targetNode.id)
-                  // Clean up dictionary entry using dictionaryKey
-                  const labelDict = (app.graph.extra as any)?.labelDictionary as Record<string, LabelMetadata> | undefined
-                  if (targetNode.dictionaryKey && labelDict?.[targetNode.dictionaryKey]) {
-                    console.log('[LabelNode] Removing from dictionary:', targetNode.dictionaryKey)
-                    delete labelDict[targetNode.dictionaryKey]
-                  }
-                  originalRemoveNode.call(this, targetNode)
-                }
-              }
-            }
-          }
-        }
-      }
-      
-      // Call original remove
-      return originalRemoveNode.call(this, node)
-    }
+    // No automatic cleanup - let export validation handle orphaned labels
+    // This makes the system more predictable and debuggable
     
     // Function to create a label from an output
     function createLabelFromOutput(node: LGraphNode, slotIndex: number, event?: MouseEvent): void {
@@ -374,23 +282,22 @@ app.registerExtension({
       const nodeType = node.constructor.type || node.type || 'node'
       const labelName = `${nodeType}(${node.id}).${slot.name}`
       
-      // Initialize label dictionary in graph.extra if needed
-      if (!app.graph.extra) app.graph.extra = {} as any
-      if (!(app.graph.extra as any).labelDictionary) {
-        (app.graph.extra as any).labelDictionary = {} as Record<string, LabelMetadata>
-      }
+      // Check for duplicate output labels (same name, output direction)
+      // This is now done by checking existing Label nodes
+      const nodes = app.graph._nodes as LabelNode[]
+      const existingOutputLabel = nodes.find(n => 
+        n.type === 'Label' && 
+        n.properties?.labelName === labelName && 
+        n.properties?.labelDirection === 'output'
+      )
       
-      const labelDict = (app.graph.extra as any).labelDictionary as Record<string, LabelMetadata>
-      
-      // Check for duplicates
-      if (labelDict[labelName]) {
-        console.log('[LabelNode] Duplicate check failed. Label exists:', labelName, labelDict[labelName])
-        console.log('[LabelNode] Current dictionary:', labelDict)
+      if (existingOutputLabel) {
+        console.log('[LabelNode] Duplicate output label detected:', labelName)
         const toastStore = useToastStore()
         toastStore.add({
           severity: 'error',
           summary: 'Duplicate Label',
-          detail: 'A label already exists!',
+          detail: 'An output label with this name already exists!',
           life: 3000
         })
         return
@@ -402,7 +309,12 @@ app.registerExtension({
       
       labelNode.properties.labelName = labelName
       labelNode.properties.labelDirection = 'output'
-      labelNode.dictionaryKey = labelName  // For output labels, key is the label name
+      // Store source connection info for dictionary-free resolution
+      labelNode.properties.sourceNodeId = Number(node.id)
+      labelNode.properties.sourceSlotIndex = slotIndex
+      labelNode.properties.sourceSlotName = slot.name
+      labelNode.properties.sourceSlotType = String(slot.type || '*')
+      // No longer need dictionaryKey - all info stored in properties
       
       // Position it where the mouse was released
       // The event position should be in the options passed to the context menu
@@ -419,38 +331,42 @@ app.registerExtension({
       // This creates the visual wire connection
       node.connect(slotIndex, labelNode, 0)
       
-      // Store in dictionary
-      labelDict[labelName] = {
-        nodeId: Number(node.id),
-        slotName: slot.name,
-        slotType: String(slot.type || '*'),
-        direction: 'output',
-        anchorNodeId: Number(labelNode.id)
-      }
-      
       // Update node size to fit label
       labelNode.setSize(labelNode.computeSize())
     }
     
     // Function to get compatible labels for an input
-    function getCompatibleLabels(node: LGraphNode, slotIndex: number): Array<{name: string, metadata: LabelMetadata}> {
+    function getCompatibleLabels(node: LGraphNode, slotIndex: number): Array<{name: string, sourceInfo: any}> {
       const slot = node.inputs[slotIndex]
       if (!slot) return []
       
-      const compatibleLabels: Array<{name: string, metadata: LabelMetadata}> = []
+      const compatibleLabels: Array<{name: string, sourceInfo: any}> = []
       
-      const labelDict = ((app.graph.extra as any)?.labelDictionary || {}) as Record<string, LabelMetadata>
-      for (const [labelName, metadata] of Object.entries(labelDict)) {
-        const typedMetadata = metadata as LabelMetadata
-        // Only show output labels (we connect inputs to output labels)
-        if (typedMetadata.direction !== 'output') continue
+      // Find all output labels from existing Label nodes
+      const nodes = app.graph._nodes as LabelNode[]
+      const outputLabels = nodes.filter(n => 
+        n.type === 'Label' && 
+        n.properties?.labelDirection === 'output'
+      )
+      
+      for (const labelNode of outputLabels) {
+        const labelName = labelNode.properties?.labelName
+        const outputType = labelNode.properties?.sourceSlotType || '*'
+        
+        if (!labelName) continue
         
         // Check type compatibility
         const inputType = slot.type || '*'
-        const outputType = typedMetadata.slotType || '*'
         
         if (LiteGraph.isValidConnection(outputType, inputType)) {
-          compatibleLabels.push({ name: labelName, metadata: typedMetadata })
+          compatibleLabels.push({ 
+            name: labelName, 
+            sourceInfo: {
+              nodeId: labelNode.properties.sourceNodeId,
+              slotName: labelNode.properties.sourceSlotName,
+              slotType: outputType
+            }
+          })
         }
       }
       
@@ -458,7 +374,7 @@ app.registerExtension({
     }
     
     // Function to connect an input to a label
-    function connectToLabel(node: LGraphNode, slotIndex: number, label: {name: string, metadata: LabelMetadata}, event?: MouseEvent): void {
+    function connectToLabel(node: LGraphNode, slotIndex: number, label: {name: string, sourceInfo: any}, event?: MouseEvent): void {
       // Create a label node for the INPUT side
       // This label has OUTPUT only (no input) to connect to the node's input
       const inputLabelNode = LiteGraph.createNode('Label') as LabelNode
@@ -466,10 +382,15 @@ app.registerExtension({
       
       inputLabelNode.properties.labelName = label.name
       inputLabelNode.properties.labelDirection = 'input'
+      // Store target connection info for dictionary-free resolution
+      inputLabelNode.properties.targetNodeId = Number(node.id)
+      inputLabelNode.properties.targetSlotIndex = slotIndex
+      const targetSlot = node.inputs[slotIndex]
+      inputLabelNode.properties.targetSlotName = targetSlot?.name || `input_${slotIndex}`
+      inputLabelNode.properties.targetSlotType = String(targetSlot?.type || '*')
+      inputLabelNode.properties.connectedToLabel = label.name
       
-      // Create a unique dictionary key for input labels
-      const dictionaryKey = `${label.name}_input_${node.id}_${slotIndex}`
-      inputLabelNode.dictionaryKey = dictionaryKey
+      // No longer need dictionaryKey - all info stored in properties
       
       // IMPORTANT: Input-side labels have OUTPUT only, no input!
       // We need to reconfigure the node
@@ -505,28 +426,8 @@ app.registerExtension({
       // This is the only connection - NO connection between actual nodes!
       inputLabelNode.connect(0, node, slotIndex)
       
-      // Add input label to dictionary for export system
-      const inputSlot = node.inputs[slotIndex]
-      if (inputSlot) {
-        // Initialize label dictionary in graph.extra if needed
-        if (!app.graph.extra) app.graph.extra = {} as any
-        if (!(app.graph.extra as any).labelDictionary) {
-          (app.graph.extra as any).labelDictionary = {} as Record<string, LabelMetadata>
-        }
-        
-        const labelDict = (app.graph.extra as any).labelDictionary as Record<string, LabelMetadata>
-        labelDict[dictionaryKey] = {
-          nodeId: Number(node.id),
-          slotName: inputSlot.name || `input_${slotIndex}`,
-          slotType: String(inputSlot.type || '*'),
-          direction: 'input',
-          connectedToLabel: label.name  // Reference to the output label
-        } as any
-      }
-      
       console.log('[LabelNode] Created input-side label:', {
         labelName: label.name,
-        dictionaryKey: dictionaryKey,
         labelId: inputLabelNode.id,
         targetNodeId: node.id,
         targetSlot: slotIndex,
