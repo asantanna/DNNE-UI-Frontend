@@ -1,5 +1,6 @@
 import './clipspace'
 import './contextMenuFilter'
+import './dnne_labelRatsNest'
 import './dynamicPrompts'
 import './editAttention'
 import './electronAdapter'
