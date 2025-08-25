@@ -92,7 +92,7 @@ export function dnneIsValidConnection(type_a: string | number | null | undefined
 export function installDNNETypeValidation(): void {
   // @ts-ignore - LiteGraph is a global
   if (typeof LiteGraph !== 'undefined') {
-    console.log('[DNNE] Installing DNNE type validation with wildcard support');
+    // console.log('[DNNE] Installing DNNE type validation with wildcard support');
     // @ts-ignore
     LiteGraph.isValidConnection = dnneIsValidConnection;
   } else {

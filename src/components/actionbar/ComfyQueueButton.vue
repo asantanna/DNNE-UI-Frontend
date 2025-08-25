@@ -250,10 +250,10 @@ const handleAction = async (e: Event) => {
 
 // Simple export without args
 const performExport = async (e: Event, runAfter: boolean) => {
-  console.log('=== performExport START ===')
-  console.log('Event type:', e.type)
-  console.log('Event shiftKey:', 'shiftKey' in e ? e.shiftKey : 'N/A')
-  console.log('Run after:', runAfter)
+  // console.log('=== performExport START ===')
+  // console.log('Event type:', e.type)
+  // console.log('Event shiftKey:', 'shiftKey' in e ? e.shiftKey : 'N/A')
+  // console.log('Run after:', runAfter)
   
   // Store the selected export target and run_after_export flag
   workspaceStore.exportTarget = selectedTargetId.value
@@ -270,8 +270,8 @@ const performExport = async (e: Event, runAfter: boolean) => {
 
 // Export with arguments - shows dialog
 const performExportWithArgs = async (runAfter: boolean) => {
-  console.log('=== performExportWithArgs START ===')
-  console.log('Run after:', runAfter)
+  // console.log('=== performExportWithArgs START ===')
+  // console.log('Run after:', runAfter)
   
   // Store the selected export target and run_after_export flag
   workspaceStore.exportTarget = selectedTargetId.value
@@ -288,7 +288,7 @@ const performExportWithArgs = async (runAfter: boolean) => {
     props: {
       buttonText,
       onConfirm: async (runnerArgs: string) => {
-        console.log('Runner args received:', runnerArgs)
+        // console.log('Runner args received:', runnerArgs)
         // Store the runner arguments
         workspaceStore.runnerArgs = runnerArgs
         
@@ -301,7 +301,7 @@ const performExportWithArgs = async (runAfter: boolean) => {
 
 // Run workflow without args
 const performRun = async () => {
-  console.log('=== performRun START ===')
+  // console.log('=== performRun START ===')
   
   const clientId = selectedTargetId.value
   
@@ -326,7 +326,7 @@ const performRun = async () => {
 
 // Check if workflow exists on remote
 const checkWorkflowExists = async (clientId: string): Promise<boolean> => {
-  console.log('Checking if workflow exists on', clientId)
+  // console.log('Checking if workflow exists on', clientId)
   
   // Send WebSocket message to check
   if (api.socket && api.socket.readyState === WebSocket.OPEN) {
@@ -376,7 +376,7 @@ const checkWorkflowExists = async (clientId: string): Promise<boolean> => {
 
 // Run workflow with args - shows dialog
 const performRunWithArgs = async () => {
-  console.log('=== performRunWithArgs START ===')
+  // console.log('=== performRunWithArgs START ===')
   
   const clientId = selectedTargetId.value
   

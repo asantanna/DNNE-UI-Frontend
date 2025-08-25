@@ -91,13 +91,13 @@ class LabelNode extends LGraphNode {
   ): boolean {
     // Input-type labels shouldn't have inputs at all
     if (this.properties?.labelDirection === 'input') {
-      console.log('[LabelNode] Input-type label rejecting input connection')
+      // console.log('[LabelNode] Input-type label rejecting input connection')
       return false
     }
     
     // Output-type labels can have one input
     if (this.inputs[inputIndex].link !== null) {
-      console.log('[LabelNode] Rejecting connection - label already has input')
+      // console.log('[LabelNode] Rejecting connection - label already has input')
       return false // Reject the connection
     }
     return true // Allow first connection
@@ -113,14 +113,14 @@ class LabelNode extends LGraphNode {
   ): boolean {
     // Output-type labels shouldn't have outputs at all
     if (this.properties?.labelDirection === 'output') {
-      console.log('[LabelNode] Output-type label rejecting output connection')
+      // console.log('[LabelNode] Output-type label rejecting output connection')
       return false
     }
     
     // Input-type labels can have connections from their output
     // But only allow one connection
     if (this.outputs[outputIndex].links && this.outputs[outputIndex].links.length > 0) {
-      console.log('[LabelNode] Rejecting connection - label output already connected')
+      // console.log('[LabelNode] Rejecting connection - label output already connected')
       return false
     }
     return true
@@ -157,10 +157,10 @@ class LabelNode extends LGraphNode {
             slotIndex: link.target_slot
           }
         }
-        console.log('[LabelNode] Stored connection info:', this.originalConnection, 'direction:', this.properties?.labelDirection)
+        // console.log('[LabelNode] Stored connection info:', this.originalConnection, 'direction:', this.properties?.labelDirection)
       } else if (!isConnected && this.originalConnection) {
         // Connection was removed, restore it immediately
-        console.log('[LabelNode] Restoring connection to prevent disconnection')
+        // console.log('[LabelNode] Restoring connection to prevent disconnection')
         
         if (this.properties?.labelDirection === 'output') {
           // Restore connection TO this label
@@ -268,7 +268,7 @@ app.registerExtension({
   name: 'Comfy.LabelNode',
   
   async setup() {
-    console.log('[LabelNode] Extension setup starting... VERSION 4.0 - DICTIONARY-FREE')
+    // console.log('[LabelNode] Extension setup starting... VERSION 4.0 - DICTIONARY-FREE')
     
     // No automatic cleanup - let export validation handle orphaned labels
     // This makes the system more predictable and debuggable
@@ -292,7 +292,7 @@ app.registerExtension({
       )
       
       if (existingOutputLabel) {
-        console.log('[LabelNode] Duplicate output label detected:', labelName)
+        // console.log('[LabelNode] Duplicate output label detected:', labelName)
         const toastStore = useToastStore()
         toastStore.add({
           severity: 'error',
@@ -426,14 +426,14 @@ app.registerExtension({
       // This is the only connection - NO connection between actual nodes!
       inputLabelNode.connect(0, node, slotIndex)
       
-      console.log('[LabelNode] Created input-side label:', {
-        labelName: label.name,
-        labelId: inputLabelNode.id,
-        targetNodeId: node.id,
-        targetSlot: slotIndex,
-        hasOutput: inputLabelNode.outputs.length > 0,
-        hasInput: inputLabelNode.inputs.length > 0
-      })
+      // console.log('[LabelNode] Created input-side label:', {
+      //   labelName: label.name,
+      //   labelId: inputLabelNode.id,
+      //   targetNodeId: node.id,
+      //   targetSlot: slotIndex,
+      //   hasOutput: inputLabelNode.outputs.length > 0,
+      //   hasInput: inputLabelNode.inputs.length > 0
+      // })
     }
     
     // Track hook installation
@@ -444,32 +444,32 @@ app.registerExtension({
     const installContextMenuHook = () => {
       hookInstallCount++
       const installTime = Date.now()
-      console.log(`[LabelNode] Installing ContextMenu hook (attempt #${hookInstallCount} at ${installTime})`)
+      // console.log(`[LabelNode] Installing ContextMenu hook (attempt #${hookInstallCount} at ${installTime})`)
       
       // Store the original ContextMenu
       const OrigContextMenu = LiteGraph.ContextMenu
-      console.log('[LabelNode] Original ContextMenu stored:', !!OrigContextMenu)
+      // console.log('[LabelNode] Original ContextMenu stored:', !!OrigContextMenu)
       
       // Create our wrapper with debug info
       const wrapper = function(values: any, options: any) {
-        console.log('[LabelNode-Hook] ContextMenu wrapper called!', {
-          valuesLength: values?.length,
-          firstValue: values?.[0],
-          timestamp: Date.now(),
-          options: options
-        })
+        // console.log('[LabelNode-Hook] ContextMenu wrapper called!', {
+        //   valuesLength: values?.length,
+        //   firstValue: values?.[0],
+        //   timestamp: Date.now(),
+        //   options: options
+        // })
         
         // Check if connection info is in the options
-        console.log('[LabelNode-Hook] Options detail:', {
-          hasOptions: !!options,
-          optionsKeys: options ? Object.keys(options) : [],
-          event: options?.event ? 'MouseEvent' : 'none',
-          parentMenu: !!options?.parentMenu,
-          node: options?.node?.id,
-          extra: options?.extra,
-          link: options?.link,
-          optionsFull: options
-        })
+        // console.log('[LabelNode-Hook] Options detail:', {
+        //   hasOptions: !!options,
+        //   optionsKeys: options ? Object.keys(options) : [],
+        //   event: options?.event ? 'MouseEvent' : 'none',
+        //   parentMenu: !!options?.parentMenu,
+        //   node: options?.node?.id,
+        //   extra: options?.extra,
+        //   link: options?.link,
+        //   optionsFull: options
+        // })
         
         // Check if this is a menu for a released connection
         if (values && Array.isArray(values)) {
@@ -480,7 +480,7 @@ app.registerExtension({
             const item = values[i]
             if (item && (item.content === 'Add Reroute' || item === 'Add Reroute')) {
               rerouteIndex = i
-              console.log('[LabelNode-Hook] Found Add Reroute at index:', i)
+              // console.log('[LabelNode-Hook] Found Add Reroute at index:', i)
               break
             }
           }
@@ -523,7 +523,7 @@ app.registerExtension({
                       const val = slotInfo[key]
                       if (val && typeof val === 'object' && val.id !== undefined) {
                         node = val
-                        console.log('[LabelNode-Hook] Found node via property:', key)
+                        // console.log('[LabelNode-Hook] Found node via property:', key)
                         break
                       }
                     } catch (e) {
@@ -536,13 +536,13 @@ app.registerExtension({
               // Try different possible property names for slot index
               slotIndex = slotInfo.slot_index ?? slotInfo.slotIndex ?? slotInfo.index ?? null
               
-              console.log('[LabelNode-Hook] Initial slot index check:', {
-                slotIndex,
-                hasNode: !!node,
-                nodeId: node?.id,
-                isOutput: slotInfo?.constructor?.name === 'NodeOutputSlot',
-                isInput: slotInfo?.constructor?.name === 'NodeInputSlot'
-              })
+              // console.log('[LabelNode-Hook] Initial slot index check:', {
+              //   slotIndex,
+              //   hasNode: !!node,
+              //   nodeId: node?.id,
+              //   isOutput: slotInfo?.constructor?.name === 'NodeOutputSlot',
+              //   isInput: slotInfo?.constructor?.name === 'NodeInputSlot'
+              // })
               
               // If still null, try to find it from the node's outputs or inputs
               if (slotIndex === null && node) {
@@ -551,13 +551,13 @@ app.registerExtension({
                   for (let i = 0; i < node.outputs.length; i++) {
                     if (node.outputs[i] === slotInfo) {
                       slotIndex = i
-                      console.log('[LabelNode-Hook] Found slot index by matching output object:', i)
+                      // console.log('[LabelNode-Hook] Found slot index by matching output object:', i)
                       break
                     }
                     // Also check by name as fallback
                     if (node.outputs[i].name === slotInfo.name) {
                       slotIndex = i
-                      console.log('[LabelNode-Hook] Found slot index by output name match:', i)
+                      // console.log('[LabelNode-Hook] Found slot index by output name match:', i)
                       break
                     }
                   }
@@ -565,28 +565,28 @@ app.registerExtension({
                 
                 // Check inputs if still not found
                 if (slotIndex === null && node.inputs) {
-                  console.log('[LabelNode-Hook] Checking inputs for slot match:', {
-                    slotInfoName: slotInfo.name,
-                    slotInfoType: slotInfo.type,
-                    nodeInputs: node.inputs.map((inp: any, idx: number) => ({
-                      idx,
-                      name: inp.name,
-                      type: inp.type,
-                      matches: inp === slotInfo,
-                      nameMatches: inp.name === slotInfo.name
-                    }))
-                  })
+                  // console.log('[LabelNode-Hook] Checking inputs for slot match:', {
+                  //   slotInfoName: slotInfo.name,
+                  //   slotInfoType: slotInfo.type,
+                  //   nodeInputs: node.inputs.map((inp: any, idx: number) => ({
+                  //     idx,
+                  //     name: inp.name,
+                  //     type: inp.type,
+                  //     matches: inp === slotInfo,
+                  //     nameMatches: inp.name === slotInfo.name
+                  //   }))
+                  // })
                   
                   for (let i = 0; i < node.inputs.length; i++) {
                     if (node.inputs[i] === slotInfo) {
                       slotIndex = i
-                      console.log('[LabelNode-Hook] Found slot index by matching input object:', i)
+                      // console.log('[LabelNode-Hook] Found slot index by matching input object:', i)
                       break
                     }
                     // Also check by name as fallback
                     if (node.inputs[i].name === slotInfo.name) {
                       slotIndex = i
-                      console.log('[LabelNode-Hook] Found slot index by input name match:', i)
+                      // console.log('[LabelNode-Hook] Found slot index by input name match:', i)
                       break
                     }
                   }
@@ -598,28 +598,28 @@ app.registerExtension({
             
             // Debug: Show what's actually in options when we have 4 keys
             if (options && Object.keys(options).length === 4) {
-              console.log('[LabelNode-Hook] Options with 4 keys - full object:', options)
-              if (slotInfo) {
-                console.log('[LabelNode-Hook] SlotInfo properties:', Object.keys(slotInfo))
-                console.log('[LabelNode-Hook] SlotInfo node access attempts:', {
-                  direct: slotInfo.node,
-                  hash: slotInfo['#node'],
-                  found: !!node,
-                  nodeId: node?.id
-                })
-              }
+              // console.log('[LabelNode-Hook] Options with 4 keys - full object:', options)
+              // if (slotInfo) {
+              //   console.log('[LabelNode-Hook] SlotInfo properties:', Object.keys(slotInfo))
+              //   console.log('[LabelNode-Hook] SlotInfo node access attempts:', {
+              //     direct: slotInfo.node,
+              //     hash: slotInfo['#node'],
+              //     found: !!node,
+              //     nodeId: node?.id
+              //   })
+              // }
             }
             
-            console.log('[LabelNode-Hook] Connection info from options.extra:', {
-              hasConnection,
-              hasExtra: !!options?.extra,
-              extraType: options?.extra ? options.extra.constructor.name : 'none',
-              nodeId: node?.id,
-              slotIndex: slotIndex,
-              slotName: slotInfo?.name,
-              slotType: slotInfo?.type,
-              isOutput: slotInfo?.constructor?.name === 'NodeOutputSlot'
-            })
+            // console.log('[LabelNode-Hook] Connection info from options.extra:', {
+            //   hasConnection,
+            //   hasExtra: !!options?.extra,
+            //   extraType: options?.extra ? options.extra.constructor.name : 'none',
+            //   nodeId: node?.id,
+            //   slotIndex: slotIndex,
+            //   slotName: slotInfo?.name,
+            //   slotType: slotInfo?.type,
+            //   isOutput: slotInfo?.constructor?.name === 'NodeOutputSlot'
+            // })
             
             if (hasConnection && slotInfo) {
               // FAIL FAST - Never guess slot indices!
@@ -635,7 +635,7 @@ app.registerExtension({
               }
               
               const slot = slotIndex
-              console.log('[LabelNode-Hook] Using slot index:', slot)
+              // console.log('[LabelNode-Hook] Using slot index:', slot)
               // Check if it's an output slot (NodeOutputSlot) or input slot
               const isOutput = slotInfo.constructor.name === 'NodeOutputSlot'
               
@@ -644,27 +644,27 @@ app.registerExtension({
                 values.splice(rerouteIndex + 1, 0, {
                   content: 'Create Label',
                   callback: () => {
-                    console.log('[LabelNode-Hook] Create Label clicked!')
-                    console.log('[LabelNode-Hook] Creating label for:', {
-                      nodeId: node.id,
-                      slot,
-                      isOutput,
-                      slotName: node.outputs[slot]?.name
-                    })
+                    // console.log('[LabelNode-Hook] Create Label clicked!')
+                    // console.log('[LabelNode-Hook] Creating label for:', {
+                    //   nodeId: node.id,
+                    //   slot,
+                    //   isOutput,
+                    //   slotName: node.outputs[slot]?.name
+                    // })
                     createLabelFromOutput(node, slot, options?.event)
                   }
                 })
               } else {
                 // Connecting to existing label from input
-                console.log('[LabelNode-Hook] Checking for input slot labels:', {
-                  nodeId: node?.id,
-                  slot,
-                  inputSlot: node?.inputs?.[slot],
-                  slotType: node?.inputs?.[slot]?.type
-                })
+                // console.log('[LabelNode-Hook] Checking for input slot labels:', {
+                //   nodeId: node?.id,
+                //   slot,
+                //   inputSlot: node?.inputs?.[slot],
+                //   slotType: node?.inputs?.[slot]?.type
+                // })
                 
                 const compatibleLabels = getCompatibleLabels(node, slot)
-                console.log('[LabelNode-Hook] Compatible labels found:', compatibleLabels.length, compatibleLabels)
+                // console.log('[LabelNode-Hook] Compatible labels found:', compatibleLabels.length, compatibleLabels)
                 
                 if (compatibleLabels.length > 0) {
                   // Add submenu for connecting to labels
@@ -684,7 +684,7 @@ app.registerExtension({
                   })
                 } else {
                   // Show why no labels were found for debugging
-                  console.log('[LabelNode-Hook] No compatible labels. Current labels:', (app.graph.extra as any)?.labelDictionary)
+                  // console.log('[LabelNode-Hook] No compatible labels. Current labels:', (app.graph.extra as any)?.labelDictionary)
                 }
               }
             } else {
@@ -692,7 +692,7 @@ app.registerExtension({
               values.splice(rerouteIndex + 1, 0, {
                 content: 'Create Label (No Connection)',
                 callback: () => {
-                  console.log('[LabelNode-Hook] No connection info available')
+                  // console.log('[LabelNode-Hook] No connection info available')
                 }
               })
             }
@@ -715,7 +715,7 @@ app.registerExtension({
         ;(LiteGraph.ContextMenu as any)[prop] = (OrigContextMenu as any)[prop]
       }
       
-      console.log('[LabelNode] ContextMenu hook installed successfully')
+      // console.log('[LabelNode] ContextMenu hook installed successfully')
     }
     
     // Function to check if our hook is still installed
@@ -725,13 +725,13 @@ app.registerExtension({
         console.warn('[LabelNode] Hook was replaced! Reinstalling...')
         installContextMenuHook()
       } else {
-        console.log('[LabelNode] Hook still active (installed at:', currentHook._installTime, ')')
+        // console.log('[LabelNode] Hook still active (installed at:', currentHook._installTime, ')')
       }
     }
     
     // Initial installation with delay
     setTimeout(() => {
-      console.log('[LabelNode] About to install hook (version: 2024-11-22-v2)')
+      // console.log('[LabelNode] About to install hook (version: 2024-11-22-v2)')
       installContextMenuHook()
       
       // Set up periodic checks to ensure hook stays installed
@@ -741,12 +741,12 @@ app.registerExtension({
       setTimeout(() => {
         if (checkInterval) {
           clearInterval(checkInterval)
-          console.log('[LabelNode] Stopped periodic hook checks')
+          // console.log('[LabelNode] Stopped periodic hook checks')
         }
       }, 10000)
     }, 200)
     
-    console.log('[LabelNode] Extension setup complete')
+    // console.log('[LabelNode] Extension setup complete')
   },
   
   registerCustomNodes() {

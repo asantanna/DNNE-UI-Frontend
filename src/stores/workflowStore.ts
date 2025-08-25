@@ -75,7 +75,7 @@ export class ComfyWorkflow extends UserFile {
     }
 
     // Note: originalContent is populated by super.load()
-    console.debug('load and start tracking of workflow', this.path)
+    // console.debug('load and start tracking of workflow', this.path)
     this.changeTracker = markRaw(
       new ChangeTracker(
         this,
@@ -271,7 +271,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
     const loadedWorkflow = await workflow.load()
     activeWorkflow.value = loadedWorkflow
-    console.debug('[workflowStore] open workflow', workflow.path)
+    // console.debug('[workflowStore] open workflow', workflow.path)
     return loadedWorkflow
   }
 

@@ -5,7 +5,7 @@
  * Handles wildcards and specific types with intelligent fallback to suffix-based colors.
  */
 
-import { LGraphCanvas, LGraphNode } from '@comfyorg/litegraph'
+import { LGraphNode } from '@comfyorg/litegraph'
 import { SUFFIX_COLOR_MAP, DNNE_COLORS } from '@/constants/dnneColors'
 
 /**
@@ -219,7 +219,7 @@ export function overrideConnectSlots() {
     return link
   }
   
-  console.log('DNNE connectSlots override installed - links will use resolved types')
+  // console.log('DNNE connectSlots override installed - links will use resolved types')
 }
 
 /**
@@ -231,17 +231,17 @@ export function installDNNELinkColors() {
   overrideConnectSlots()
   
   // The actual color resolution happens via the enhanced color map
-  console.log('DNNE link color system active - using resolved link types')
+  // console.log('DNNE link color system active - using resolved link types')
   
   // Debug: Log some of the color mappings to verify they're loaded
-  if (typeof LGraphCanvas !== 'undefined' && LGraphCanvas.link_type_colors) {
-    const sampleTypes = ['TENSOR', 'TRIGGER', 'BATCH_IMAGE_TENSOR', 'ANY']
-    console.log('Sample color mappings:')
-    for (const type of sampleTypes) {
-      const color = LGraphCanvas.link_type_colors[type]
-      if (color) {
-        console.log(`  ${type}: ${color}`)
-      }
-    }
-  }
+  // if (typeof LGraphCanvas !== 'undefined' && LGraphCanvas.link_type_colors) {
+  //   const sampleTypes = ['TENSOR', 'TRIGGER', 'BATCH_IMAGE_TENSOR', 'ANY']
+  //   console.log('Sample color mappings:')
+  //   for (const type of sampleTypes) {
+  //     const color = LGraphCanvas.link_type_colors[type]
+  //     if (color) {
+  //       console.log(`  ${type}: ${color}`)
+  //     }
+  //   }
+  // }
 }

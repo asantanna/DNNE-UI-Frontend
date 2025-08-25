@@ -16,8 +16,8 @@ let shiftKeyPressed = false
  * Initializes multiple connection support by overriding LiteGraph methods
  */
 export function initializeMultiConnectionSupport() {
-  console.log('[DNNE] Initializing multi-connection support')
-  console.log('[DNNE] LGraphNode.prototype.connectSlots exists:', !!LGraphNode.prototype.connectSlots)
+  // console.log('[DNNE] Initializing multi-connection support')
+  // console.log('[DNNE] LGraphNode.prototype.connectSlots exists:', !!LGraphNode.prototype.connectSlots)
   
   // FIRST: Override connectSlots to prevent automatic disconnection for multi-connection inputs
   // This must happen BEFORE we capture originalConnect, so originalConnect uses our modified connectSlots
@@ -27,11 +27,11 @@ export function initializeMultiConnectionSupport() {
     input: any,
     afterRerouteId?: any
   ): LLink | null {
-    console.log('[DNNE] connectSlots override called!', {
-      output,
-      input,
-      hasExistingLink: input?.link != null
-    })
+    // console.log('[DNNE] connectSlots override called!', {
+    //   output,
+    //   input,
+    //   hasExistingLink: input?.link != null
+    // })
     
     const { graph } = this
     if (!graph) {
@@ -67,15 +67,15 @@ export function initializeMultiConnectionSupport() {
     // MODIFIED: Check if we should disconnect existing connections
     const existingLink = inputNode.inputs[inputIndex]?.link
     if (existingLink != null) {
-      console.log('[DNNE] Input has existing connection. single_conn_only:', input.single_conn_only)
+      // console.log('[DNNE] Input has existing connection. single_conn_only:', input.single_conn_only)
       // Only disconnect if the input is marked as single_conn_only
       // For multi-connection inputs, we keep existing connections
       if (input.single_conn_only === true) {
-        console.log('[DNNE] Disconnecting existing connection (single_conn_only = true)')
+        // console.log('[DNNE] Disconnecting existing connection (single_conn_only = true)')
         graph.beforeChange()
         inputNode.disconnectInput(inputIndex, true)
       } else {
-        console.log('[DNNE] Preserving existing connection(s) for multi-connection input')
+        // console.log('[DNNE] Preserving existing connection(s) for multi-connection input')
         // Initialize links array if needed and preserve the existing link
         if (!inputNode.inputs[inputIndex].links) {
           inputNode.inputs[inputIndex].links = []
@@ -83,11 +83,11 @@ export function initializeMultiConnectionSupport() {
         // Add existing link to array if not already there
         if (!inputNode.inputs[inputIndex].links.includes(existingLink)) {
           inputNode.inputs[inputIndex].links.push(existingLink)
-          console.log('[DNNE] Preserved existing link in array:', existingLink)
+          // console.log('[DNNE] Preserved existing link in array:', existingLink)
         }
       }
     } else {
-      console.log('[DNNE] No existing connection on input')
+      // console.log('[DNNE] No existing connection on input')
     }
     
     // Create the new link (LLink constructor is available on LiteGraph)
@@ -116,7 +116,7 @@ export function initializeMultiConnectionSupport() {
         inputNode.inputs[inputIndex].links = []
       }
       inputNode.inputs[inputIndex].links.push(link.id)
-      console.log('[DNNE] Added new link to multi-connection array. Total:', inputNode.inputs[inputIndex].links.length)
+      // console.log('[DNNE] Added new link to multi-connection array. Total:', inputNode.inputs[inputIndex].links.length)
     }
     // Update the single link field for compatibility
     // Now that rendering supports links array, we can just set it to the new link
@@ -197,17 +197,17 @@ export function initializeMultiConnectionSupport() {
     linkConnector.moveInputLink = function(network: any, input: any) {
       // Only allow moving (which disconnects) if shift is pressed
       if (!shiftKeyPressed) {
-        console.log('[DNNE] Preventing input disconnection - shift key not pressed')
+        // console.log('[DNNE] Preventing input disconnection - shift key not pressed')
         // Instead of moving, we should start a new connection
         // Return without doing anything - this prevents the disconnection
         return
       }
       // Allow normal behavior when shift is pressed
-      console.log('[DNNE] Allowing input disconnection - shift key pressed')
+      // console.log('[DNNE] Allowing input disconnection - shift key pressed')
       return originalMoveInputLink.call(this, network, input)
     }
     
-    console.log('[DNNE] LinkConnector override installed')
+    // console.log('[DNNE] LinkConnector override installed')
   }
   
   // Start trying to setup the override
@@ -228,7 +228,7 @@ export function initializeMultiConnectionSupport() {
         if (input && inputInfo.links && Array.isArray(inputInfo.links)) {
           // Restore the links array from serialized data
           input.links = [...inputInfo.links]
-          console.log(`[DNNE] Restored links array for input ${i}:`, input.links)
+          // console.log(`[DNNE] Restored links array for input ${i}:`, input.links)
           
           // Ensure link field has a value for compatibility
           if (input.links.length > 0 && !input.link) {
@@ -252,7 +252,7 @@ export function initializeMultiConnectionSupport() {
           // Ensure the serialized input has the links array
           if (data.inputs[i] && !data.inputs[i].links) {
             data.inputs[i].links = [...input.links]
-            console.log(`[DNNE] Serialized links array for input ${i}:`, input.links)
+            // console.log(`[DNNE] Serialized links array for input ${i}:`, input.links)
           }
         }
       }
