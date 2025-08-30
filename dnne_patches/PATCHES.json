@@ -5,7 +5,7 @@
     "target_path": "node_modules/@comfyorg/litegraph/dist/litegraph.es.js",
     "patch_path": "dnne_patches/litegraph/litegraph.es.js",
     "original_path": "dnne_patches/litegraph/orig_litegraph.es.js",
-    "timestamp": 1755999278,
+    "timestamp": 1756529468.4630682,
     "description": "Add multi-connection input rendering support - allows inputs to visually display multiple connections"
   }
 ]

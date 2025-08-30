@@ -50,17 +50,10 @@ class LabelNode extends LGraphNode {
     // The connections will still work, just won't show the circles
   }
   
-  // Prevent disconnecting the input (for output-type labels)
-  override disconnectInput(_slot: number): boolean {
-    // Don't allow disconnecting - labels should be deleted instead
-    return false
-  }
-  
-  // Prevent disconnecting the output (for input-type labels)
-  override disconnectOutput(_slot: number): boolean {
-    // Don't allow disconnecting - labels should be deleted instead
-    return false
-  }
+  // Allow disconnection - the label will be deleted automatically when its wire is removed
+  // (See the removeLink hook in setup() that handles this)
+  // We no longer need to prevent disconnection since orphaned labels are prevented
+  // by deleting the label when its wire is deleted
   
   // Override to prevent creating connections from this node
   override onMouseDown(_e: any, _localPos: any, _graphCanvas: any): boolean {
@@ -126,62 +119,8 @@ class LabelNode extends LGraphNode {
     return true
   }
   
-  // Store original connection info to restore if disconnected
-  originalConnection?: { nodeId: number; slotIndex: number }
-  
-  // Detect and restore disconnections
-  override onConnectionsChange(
-    type: number,
-    slotIndex: number,
-    isConnected: boolean,
-    link: any
-  ): void {
-    // Handle both input and output connections based on label direction
-    const isInputConnection = (type === 1) // LiteGraph.INPUT
-    const isOutputConnection = (type === 2) // LiteGraph.OUTPUT
-    
-    if ((this.properties?.labelDirection === 'output' && isInputConnection && slotIndex === 0) ||
-        (this.properties?.labelDirection === 'input' && isOutputConnection && slotIndex === 0)) {
-      if (isConnected && link) {
-        // Store the connection info when connected
-        if (this.properties?.labelDirection === 'output') {
-          // For output labels, store the source that connects TO this label
-          this.originalConnection = {
-            nodeId: link.origin_id,
-            slotIndex: link.origin_slot
-          }
-        } else {
-          // For input labels, store the target that this label connects TO
-          this.originalConnection = {
-            nodeId: link.target_id,
-            slotIndex: link.target_slot
-          }
-        }
-        // console.log('[LabelNode] Stored connection info:', this.originalConnection, 'direction:', this.properties?.labelDirection)
-      } else if (!isConnected && this.originalConnection) {
-        // Connection was removed, restore it immediately
-        // console.log('[LabelNode] Restoring connection to prevent disconnection')
-        
-        if (this.properties?.labelDirection === 'output') {
-          // Restore connection TO this label
-          const sourceNode = app.graph.getNodeById(this.originalConnection.nodeId)
-          if (sourceNode) {
-            setTimeout(() => {
-              sourceNode.connect(this.originalConnection!.slotIndex, this, 0)
-            }, 0)
-          }
-        } else {
-          // Restore connection FROM this label
-          const targetNode = app.graph.getNodeById(this.originalConnection.nodeId)
-          if (targetNode) {
-            setTimeout(() => {
-              this.connect(0, targetNode, this.originalConnection!.slotIndex)
-            }, 0)
-          }
-        }
-      }
-    }
-  }
+  // No longer need to track or restore connections
+  // The removeLink hook in setup() handles label deletion when wires are removed
   
   override computeSize(): [number, number] {
     if (!this.properties?.labelName) return [100, 30]
@@ -259,7 +198,8 @@ class LabelNode extends LGraphNode {
   }
   
   override onRemoved(): void {
-    // No cleanup needed - labels are self-contained with all info in properties
+    // No cleanup needed - when a label is deleted, its connections are automatically removed
+    // The prevention of disconnection in disconnectInput/Output ensures labels can't become orphaned
     super.onRemoved?.()
   }
 }
@@ -269,6 +209,41 @@ app.registerExtension({
   
   async setup() {
     // console.log('[LabelNode] Extension setup starting... VERSION 4.0 - DICTIONARY-FREE')
+    
+    // Hook into graph to handle Label node deletion when wires are deleted
+    const originalRemoveLink = app.graph.removeLink?.bind(app.graph)
+    if (originalRemoveLink) {
+      app.graph.removeLink = function(link_id: number) {
+        // Debug logging (uncomment if needed)
+        // console.log('[LabelNode-Hook] removeLink called for link:', link_id)
+        
+        // Get the link info before removal
+        const link = this.links[link_id]
+        
+        if (link) {
+          // Check if either end is a Label node
+          const targetNode = this.getNodeById(link.target_id)
+          const sourceNode = this.getNodeById(link.origin_id)
+          
+          // If target is a Label node, delete it when the wire is deleted
+          if (targetNode && targetNode.type === 'Label') {
+            // console.log('[LabelNode] Deleting label node because its input wire was deleted:', targetNode.id)
+            this.remove(targetNode)
+            return // The label removal will handle the link
+          }
+          
+          // If source is a Label node, delete it when the wire is deleted
+          if (sourceNode && sourceNode.type === 'Label') {
+            // console.log('[LabelNode] Deleting label node because its output wire was deleted:', sourceNode.id)
+            this.remove(sourceNode)
+            return // The label removal will handle the link
+          }
+        }
+        
+        // Normal link removal for non-Label connections
+        return originalRemoveLink.call(this, link_id)
+      }
+    }
     
     // No automatic cleanup - let export validation handle orphaned labels
     // This makes the system more predictable and debuggable
@@ -392,35 +367,40 @@ app.registerExtension({
       
       // No longer need dictionaryKey - all info stored in properties
       
-      // IMPORTANT: Input-side labels have OUTPUT only, no input!
-      // We need to reconfigure the node
-      inputLabelNode.removeInput(0) // Remove the default input
-      inputLabelNode.addOutput("", "*") // Add an output instead
-      
-      // Calculate the label size first so we know its width
-      inputLabelNode.setSize(inputLabelNode.computeSize())
-      
-      // Position it where the mouse was released (like output labels do)
+      // Position it first (before reconfiguring slots)
       const canvas = app.canvas as any
       const pos = event ? canvas.convertEventToCanvasOffset(event) : null
       
+      // Estimate label width before adding to graph
+      const ctx = app.canvas.ctx
+      ctx.font = `${LiteGraph.NODE_TEXT_SIZE}px Arial`
+      const textWidth = ctx.measureText(label.name).width
+      const estimatedWidth = Math.max(100, textWidth + 20)
+      
       if (pos) {
         // Use mouse position but shift left by label width
-        const labelWidth = inputLabelNode.size[0]
         inputLabelNode.pos = [
-          pos[0] - labelWidth,
+          pos[0] - estimatedWidth,
           pos[1]
         ]
       } else {
         // Fallback positioning
-        const labelWidth = inputLabelNode.size[0]
         inputLabelNode.pos = [
-          node.pos[0] - 150 - labelWidth,
+          node.pos[0] - 150 - estimatedWidth,
           node.pos[1] + (slotIndex * 20)
         ]
       }
       
+      // Add to graph FIRST (before reconfiguring slots)
       app.graph.add(inputLabelNode)
+      
+      // IMPORTANT: Input-side labels have OUTPUT only, no input!
+      // Now we can safely reconfigure the node after it's in the graph
+      inputLabelNode.removeInput(0) // Remove the default input
+      inputLabelNode.addOutput("", "*") // Add an output instead
+      
+      // Update the size after reconfiguration
+      inputLabelNode.setSize(inputLabelNode.computeSize())
       
       // Connect the label's OUTPUT to the node's INPUT
       // This is the only connection - NO connection between actual nodes!

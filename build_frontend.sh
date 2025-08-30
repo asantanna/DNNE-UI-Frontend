@@ -15,6 +15,28 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
+# Step 0: Verify patches are applied
+echo -e "${YELLOW}Step 0: Verifying patches...${NC}"
+if python dnne_patches/dnne_patches.py 2>/dev/null; then
+    echo -e "${GREEN}✓ All patches verified${NC}"
+else
+    echo -e "${YELLOW}⚠️  Some patches need updating${NC}"
+    echo -e "${YELLOW}Running automatic patch update...${NC}"
+    echo
+    
+    # Try to auto-fix patches
+    if python dnne_patches/update_patches.py; then
+        echo
+        echo -e "${GREEN}✓ Patches updated successfully${NC}"
+    else
+        echo -e "${RED}✗ Failed to update patches automatically${NC}"
+        echo -e "${RED}Please check the errors above and fix manually${NC}"
+        echo -e "${RED}Build ABORTED.${NC}"
+        exit 1
+    fi
+fi
+
+echo
 echo -e "${YELLOW}Step 1: Running TypeScript type checking...${NC}"
 if npm run typecheck; then
     echo -e "${GREEN}✓ TypeScript check passed${NC}"

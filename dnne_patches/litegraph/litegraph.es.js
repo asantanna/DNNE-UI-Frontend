@@ -12293,7 +12293,10 @@ class MapProxyHandler {
     return true;
   }
   deleteProperty(target, p) {
-    return target.delete(p);
+    // Fixed: Convert string to int like other proxy methods do
+    if (typeof p === "symbol") return false;
+    const int = parseInt(p, 10);
+    return target.delete(!isNaN(int) ? int : p);
   }
   static bindAllMethods(map) {
     map.clear = map.clear.bind(map);
